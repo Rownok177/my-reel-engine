@@ -42,9 +42,9 @@ const POSITION_STYLES: Record<string, React.CSSProperties> = {
   "top-left": { justifyContent: "flex-start", alignItems: "flex-start", paddingTop: "10vh", paddingLeft: "30px" },
   "top-right": { justifyContent: "flex-start", alignItems: "flex-end", paddingTop: "10vh", paddingRight: "30px" },
 
-  center: { justifyContent: "flex-start", alignItems: "center", paddingTop: "65vh", paddingLeft: "20px", paddingRight: "20px" },
-  "center-left": { justifyContent: "flex-start", alignItems: "flex-start", paddingTop: "65vh", paddingLeft: "30px" },
-  "center-right": { justifyContent: "flex-start", alignItems: "flex-end", paddingTop: "65vh", paddingRight: "30px" },
+  center: { justifyContent: "center", alignItems: "center", paddingLeft: "20px", paddingRight: "20px" },
+  "center-left": { justifyContent: "center", alignItems: "flex-start", paddingLeft: "30px" },
+  "center-right": { justifyContent: "center", alignItems: "flex-end", paddingRight: "30px" },
 
   bottom: { justifyContent: "flex-end", alignItems: "center", paddingBottom: "10vh", paddingLeft: "20px", paddingRight: "20px" },
   "bottom-left": { justifyContent: "flex-end", alignItems: "flex-start", paddingBottom: "10vh", paddingLeft: "30px" },
@@ -163,19 +163,10 @@ export const MainReel: React.FC<MainReelProps> = ({ videoUrl, popups }) => {
 
   let cleanUrl = String(videoUrl || "").trim();
 
-  // Fallback to CORS-supported S3 video asset if URL is empty, points to local/blob, or uses blocked Google Storage bucket
-  if (
-    !cleanUrl ||
-    cleanUrl.includes("localhost") ||
-    cleanUrl.startsWith("blob:") ||
-    cleanUrl.includes("commondatastorage.googleapis.com")
-  ) {
+  if (cleanUrl.startsWith("http") && !cleanUrl.includes("localhost")) {
+    cleanUrl = `/api/proxy-video?url=${encodeURIComponent(cleanUrl)}`;
+  } else if (!cleanUrl) {
     cleanUrl = "https://remotion-assets.s3.eu-central-1.amazonaws.com/BigBuckBunny.mp4";
-  } else {
-    const matchedUrl = cleanUrl.match(/(https?:\/\/[^\s\)\"]+|\/[^\s\)\"]+)/);
-    if (matchedUrl) {
-      cleanUrl = matchedUrl[0];
-    }
   }
 
   return (
