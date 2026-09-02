@@ -1,0 +1,53 @@
+{
+  "videoUrl": "http://localhost:3000/media/video_tmp_files/input.mp4",
+  "popups": [
+    {
+      "start_time": "00:00:00.500",
+      "headline": "BOUNCE ANIMATION",
+      "subtext": "Top-Left Safe Zone",
+      "badgeText": "FEATURE 1",
+      "position": "top-left",
+      "animationType": "bounce",
+      "textColor": "#FFFFFF",
+      "subtextColor": "#4ADE80",
+      "bgColor": "rgba(15, 23, 42, 0.92)",
+      "borderColor": "#4ADE80"
+    },
+    {
+      "start_time": "00:00:04.000",
+      "headline": "SLIDE ANIMATION",
+      "subtext": "Top-Right Safe Zone",
+      "badgeText": "FEATURE 2",
+      "position": "top-right",
+      "animationType": "slide",
+      "textColor": "#FFFFFF",
+      "subtextColor": "#FACC15",
+      "bgColor": "rgba(24, 24, 27, 0.92)",
+      "borderColor": "#FACC15"
+    },
+    {
+      "start_time": "00:00:07.500",
+      "headline": "MASSIVE ZOOM POP",
+      "subtext": "Lower-Third Focus Area",
+      "badgeText": "HIGHLIGHT",
+      "position": "center",
+      "animationType": "zoom-out",
+      "textColor": "#000000",
+      "subtextColor": "#0F172A",
+      "bgColor": "rgba(255, 255, 255, 0.95)",
+      "borderColor": "#F59E0B"
+    },
+    {
+      "start_time": "00:00:11.000",
+      "headline": "SPRING ANIMATION",
+      "subtext": "Bottom Safe Zone",
+      "badgeText": "SAFE ZONE",
+      "position": "bottom",
+      "animationType": "spring",
+      "textColor": "#FFFFFF",
+      "subtextColor": "#E879F9",
+      "bgColor": "rgba(10, 10, 15, 0.92)",
+      "borderColor": "#E879F9"
+    }
+  ]
+}

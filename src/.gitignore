@@ -1,0 +1,31 @@
+# Python Virtual Environments & Caches
+venv/
+.venv/
+__pycache__/
+*.pyc
+temp_*
+
+# Node Dependencies
+node_modules/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env*.local
+
+# Build & Render Outputs
+out/
+dist/
+build/
+.remotion/
+
+# Temporary Audio/Video Files
+*.mp4
+*.wav
+*.mp3
+
+# System & Editor Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Python Virtual Environments & Caches
+venv/
+.venv/
+__pycache__/
+
+# Build & Export Outputs
+build/
+dist/
+out/
+.next/
+
+# Environment Files
+.env
+.env*.local
+
+# System & Editor Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+.env
+src/.env
