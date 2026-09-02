@@ -163,9 +163,14 @@ export const MainReel: React.FC<MainReelProps> = ({ videoUrl, popups }) => {
 
   let cleanUrl = String(videoUrl || "").trim();
 
-  // If URL is empty, points to dead localhost, or is a browser-only blob, fallback to a reliable public video URL
-  if (!cleanUrl || cleanUrl.includes("localhost:5000") || cleanUrl.startsWith("blob:")) {
-    cleanUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+  // Fallback to CORS-supported S3 video asset if URL is empty, points to local/blob, or uses blocked Google Storage bucket
+  if (
+    !cleanUrl ||
+    cleanUrl.includes("localhost") ||
+    cleanUrl.startsWith("blob:") ||
+    cleanUrl.includes("commondatastorage.googleapis.com")
+  ) {
+    cleanUrl = "https://remotion-assets.s3.eu-central-1.amazonaws.com/BigBuckBunny.mp4";
   } else {
     const matchedUrl = cleanUrl.match(/(https?:\/\/[^\s\)\"]+|\/[^\s\)\"]+)/);
     if (matchedUrl) {
@@ -203,6 +208,5 @@ export const MainReel: React.FC<MainReelProps> = ({ videoUrl, popups }) => {
   );
 };
 
-// Aliases exported to resolve `MainComposition` import errors in Root.tsx
 export const MainComposition = MainReel;
 export default MainReel;

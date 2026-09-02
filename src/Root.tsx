@@ -14,7 +14,7 @@ export const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         defaultProps={{
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+          videoUrl: 'https://remotion-assets.s3.eu-central-1.amazonaws.com/BigBuckBunny.mp4',
           popups: [
             {
               start_time: 1.0,
