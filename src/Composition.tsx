@@ -6,6 +6,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
   interpolate,
+  staticFile,
 } from "remotion";
 
 export interface PopupData {
@@ -159,11 +160,16 @@ export const MainReel: React.FC<MainReelProps> = ({ videoUrl, popups }) => {
   const { fps } = useVideoConfig();
   const safePopups = Array.isArray(popups) ? popups : [];
 
-  // Extract clean public HTTP/HTTPS cloud URL
   let cleanUrl = String(videoUrl || "").trim();
-  const matchedUrl = cleanUrl.match(/https?:\/\/[^\s\)\"]+/);
-  if (matchedUrl) {
-    cleanUrl = matchedUrl[0];
+
+  // If URL is empty, points to dead localhost, or is an invalid local blob, fallback to static file
+  if (!cleanUrl || cleanUrl.includes("localhost:5000") || cleanUrl.startsWith("blob:")) {
+    cleanUrl = staticFile("input.mp4");
+  } else {
+    const matchedUrl = cleanUrl.match(/(https?:\/\/[^\s\)\"]+|\/[^\s\)\"]+)/);
+    if (matchedUrl) {
+      cleanUrl = matchedUrl[0];
+    }
   }
 
   return (

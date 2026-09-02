@@ -1,5 +1,5 @@
 import React from "react";
-import { Composition } from "remotion";
+import { Composition, staticFile } from "remotion";
 import { getVideoMetadata } from "@remotion/media-utils";
 import { MainReel, MainReelProps } from "./Composition";
 
@@ -14,9 +14,9 @@ export const RemotionRoot: React.FC = () => {
       calculateMetadata={async ({ props }: { props: MainReelProps }) => {
         try {
           const videoPath = props?.videoUrl;
-          if (typeof videoPath === "string" && videoPath.length > 0) {
+          if (typeof videoPath === "string" && videoPath.trim().length > 0) {
             let cleanUrl = videoPath.trim();
-            const matchedUrl = cleanUrl.match(/https?:\/\/[^\s\)\"]+/);
+            const matchedUrl = cleanUrl.match(/(https?:\/\/[^\s\)\"]+|\/[^\s\)\"]+)/);
             if (matchedUrl) {
               cleanUrl = matchedUrl[0];
             }
@@ -26,14 +26,14 @@ export const RemotionRoot: React.FC = () => {
             };
           }
         } catch {
-          // Fallback gracefully without relying on ambient console globals
+          // Fallback duration if metadata fetching fails
         }
         return {
           durationInFrames: 1250,
         };
       }}
       defaultProps={{
-        videoUrl: "http://localhost:5000/media/input.mp4",
+        videoUrl: staticFile("input.mp4"),
         popups: [
           {
             start_time: 1.0,

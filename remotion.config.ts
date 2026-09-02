@@ -1,9 +1,8 @@
 import { Config } from "@remotion/cli/config";
 import { enableTailwind } from '@remotion/tailwind-v4';
 
-// Use Webpack instead of Rspack to avoid Rspack's filesystem cache limitations
+Config.setEntryPoint("src/index.ts");
 Config.setRspack(false);
-
 Config.setVideoImageFormat("jpeg");
 Config.setOverwriteOutput(true);
 
