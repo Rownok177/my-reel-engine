@@ -15,17 +15,17 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json({ limit: "100mb" }));
 
-// Initialize S3 / Cloud Storage Client
+// Initialize S3 / Cloud Storage Client (Cloudflare R2)
 const s3Client = new S3Client({
-  region: process.env.S3_REGION || "us-east-1",
-  endpoint: process.env.S3_ENDPOINT || undefined,
+  region: process.env.S3_REGION || "auto",
+  endpoint: process.env.S3_ENDPOINT,
   credentials: {
     accessKeyId: process.env.S3_ACCESS_KEY_ID || "",
     secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || "",
   },
 });
 
-// Configure Multer for In-Memory Buffer Processing (No local disk hardcoding)
+// Configure Multer for In-Memory Buffer Processing
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
@@ -64,7 +64,7 @@ app.post("/upload", upload.single("video"), async (req, res) => {
     const sanitizedName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_");
     const filename = `raw-uploads/${Date.now()}_${sanitizedName}`;
 
-    console.log(`[Cloud Upload Start]: Uploading ${req.file.originalname} to S3 bucket...`);
+    console.log(`[Cloud Upload Start]: Uploading ${req.file.originalname} to R2 bucket...`);
 
     await s3Client.send(
       new PutObjectCommand({
@@ -94,7 +94,6 @@ app.post("/upload", upload.single("video"), async (req, res) => {
 
 // 2. Programmatic Cloud Render Endpoint
 app.post("/render", async (req, res) => {
-  let tempPropsPath = null;
   let tempOutputPath = null;
 
   try {
@@ -128,7 +127,7 @@ app.post("/render", async (req, res) => {
       inputProps: sanitizedProps,
     });
 
-    console.log(`[Render Engine]: Rendering video frames to temporary disk...`);
+    console.log(`[Render Engine]: Rendering video frames...`);
     await renderMedia({
       composition: compositionMeta,
       serveUrl: bundled,
@@ -137,7 +136,7 @@ app.post("/render", async (req, res) => {
       inputProps: sanitizedProps,
     });
 
-    console.log(`[Render Engine]: Uploading rendered MP4 to Cloud Storage...`);
+    console.log(`[Render Engine]: Uploading rendered MP4 to Cloudflare R2...`);
     const cloudRenderKey = `renders/${Date.now()}_${outputFilename}`;
     const fileStream = fs.createReadStream(tempOutputPath);
 
