@@ -1,4 +1,4 @@
-FROM node:18-bullseye-slim
+FROM node:20-bookworm-slim
 
 # Install Chromium and FFmpeg dependencies for Remotion rendering
 RUN apt-get update && apt-get install -y \
