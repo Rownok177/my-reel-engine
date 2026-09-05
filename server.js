@@ -49,9 +49,13 @@ function cleanMarkdownUrls(obj) {
   return obj;
 }
 
-// Health check endpoint
+// Health check endpoints for Render cold-start polling
 app.get("/", (req, res) => {
-  res.send("Cloud Video Render Engine Server is Running!");
+  res.status(200).send("Cloud Video Render Engine Server is Running!");
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", message: "Remotion render engine active" });
 });
 
 // 1. Direct Cloud Upload Endpoint
