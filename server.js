@@ -11,6 +11,7 @@ const { renderMedia, selectComposition } = require("@remotion/renderer");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const HOST = "0.0.0.0";
 
 app.use(cors());
 app.use(express.json({ limit: "100mb" }));
@@ -36,12 +37,10 @@ const upload = multer({
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
 });
 
-// Helper: Strips markdown link syntax [url](url) -> url
+// Helper: Safely converts markdown links [text](url) -> url without breaking text props
 function cleanMarkdownUrls(obj) {
   if (typeof obj === "string") {
-    let cleaned = obj.replace(/\[(https?:\/\/[^\]]+)\]\([^\)]+\)/g, "$1");
-    const match = cleaned.match(/https?:\/\/[^\s\)\"]+/);
-    return match ? match[0] : cleaned;
+    return obj.replace(/\[(?:[^\]]+)\]\((https?:\/\/[^\)]+)\)/g, "$1");
   } else if (Array.isArray(obj)) {
     return obj.map(cleanMarkdownUrls);
   } else if (obj !== null && typeof obj === "object") {
@@ -156,7 +155,7 @@ app.post("/render", async (req, res) => {
       codec: "h264",
       outputLocation: tempOutputPath,
       inputProps: sanitizedProps,
-      concurrency: 1, // Strict single-threaded rendering to enforce <512MB RAM usage
+      concurrency: 1, // Strict single-threaded rendering to enforce low RAM usage
       chromiumOptions: {
         args: [
           "--no-sandbox",
@@ -209,7 +208,7 @@ app.post("/render", async (req, res) => {
   }
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 [Server] Running on http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 [Server] Running on http://${HOST}:${PORT}`);
   console.log(`☁️ [Server] Cloud Storage: ${process.env.S3_BUCKET_NAME}\n`);
 });
