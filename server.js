@@ -25,9 +25,14 @@ const s3Client = new S3Client({
   },
 });
 
-// Configure Multer for In-Memory Buffer Processing
+// Configure Multer for Disk Storage (Prevents RAM spikes on large file uploads)
+const uploadDir = path.join(os.tmpdir(), "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 const upload = multer({
-  storage: multer.memoryStorage(),
+  dest: uploadDir,
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
 });
 
@@ -60,6 +65,8 @@ app.get("/health", (req, res) => {
 
 // 1. Direct Cloud Upload Endpoint
 app.post("/upload", upload.single("video"), async (req, res) => {
+  let tempFilePath = req.file?.path;
+
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: "No video file provided" });
@@ -70,11 +77,13 @@ app.post("/upload", upload.single("video"), async (req, res) => {
 
     console.log(`[Cloud Upload Start]: Uploading ${req.file.originalname} to R2 bucket...`);
 
+    const fileStream = fs.createReadStream(tempFilePath);
+
     await s3Client.send(
       new PutObjectCommand({
         Bucket: process.env.S3_BUCKET_NAME,
         Key: filename,
-        Body: req.file.buffer,
+        Body: fileStream,
         ContentType: req.file.mimetype || "video/mp4",
       })
     );
@@ -93,6 +102,15 @@ app.post("/upload", upload.single("video"), async (req, res) => {
   } catch (error) {
     console.error("[Cloud Upload Error]:", error);
     return res.status(500).json({ success: false, error: error.message });
+  } finally {
+    // Cleanup temp uploaded file from disk
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (err) {
+        console.warn("[Upload Cleanup Warning]: Could not delete temp file:", err.message);
+      }
+    }
   }
 });
 
@@ -131,13 +149,23 @@ app.post("/render", async (req, res) => {
       inputProps: sanitizedProps,
     });
 
-    console.log(`[Render Engine]: Rendering video frames...`);
+    console.log(`[Render Engine]: Rendering video frames (Low-Memory Mode)...`);
     await renderMedia({
       composition: compositionMeta,
       serveUrl: bundled,
       codec: "h264",
       outputLocation: tempOutputPath,
       inputProps: sanitizedProps,
+      concurrency: 1, // Strict single-threaded rendering to enforce <512MB RAM usage
+      chromiumOptions: {
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage", // Uses /tmp instead of shared memory pool
+          "--disable-gpu",
+          "--single-process",
+        ],
+      },
     });
 
     console.log(`[Render Engine]: Uploading rendered MP4 to Cloudflare R2...`);
@@ -170,7 +198,7 @@ app.post("/render", async (req, res) => {
       details: error.message,
     });
   } finally {
-    // Cleanup temporary files from OS temp directory
+    // Cleanup temporary output video from OS temp directory
     if (tempOutputPath && fs.existsSync(tempOutputPath)) {
       try {
         fs.unlinkSync(tempOutputPath);

@@ -37,6 +37,24 @@ export interface MainReelProps extends Record<string, unknown> {
 
 export type MainCompositionProps = MainReelProps;
 
+function unwrapProxyUrl(rawUrl: string): string {
+  let url = String(rawUrl || "").trim();
+  let prev = "";
+  while (url !== prev) {
+    prev = url;
+    try {
+      url = decodeURIComponent(url);
+    } catch {
+      // Ignore decoding errors
+    }
+    const match = url.match(/proxy-video\?url=(.+)$/i);
+    if (match && match[1]) {
+      url = match[1].trim();
+    }
+  }
+  return url;
+}
+
 const POSITION_STYLES: Record<string, React.CSSProperties> = {
   top: { justifyContent: "flex-start", alignItems: "center", paddingTop: "10vh", paddingLeft: "20px", paddingRight: "20px" },
   "top-left": { justifyContent: "flex-start", alignItems: "flex-start", paddingTop: "10vh", paddingLeft: "30px" },
@@ -161,17 +179,23 @@ export const MainReel: React.FC<MainReelProps> = ({ videoUrl, popups }) => {
   const { fps } = useVideoConfig();
   const safePopups = Array.isArray(popups) ? popups : [];
 
-  let cleanUrl = String(videoUrl || "").trim();
+  // 1. Fully unwrap nested proxy URLs back down to the source media target
+  let targetUrl = unwrapProxyUrl(videoUrl);
 
-  if (cleanUrl.startsWith("http") && !cleanUrl.includes("localhost")) {
-    cleanUrl = `/api/proxy-video?url=${encodeURIComponent(cleanUrl)}`;
-  } else if (!cleanUrl) {
-    cleanUrl = "https://remotion-assets.s3.eu-central-1.amazonaws.com/BigBuckBunny.mp4";
+  // 2. Fallback to default asset if URL is empty
+  if (!targetUrl) {
+    targetUrl = "https://remotion-assets.s3.eu-central-1.amazonaws.com/BigBuckBunny.mp4";
+  }
+
+  // 3. Attach standard proxy prefix to raw remote video URL
+  let finalUrl = targetUrl;
+  if (targetUrl.startsWith("http") && !targetUrl.includes("localhost")) {
+    finalUrl = `/api/proxy-video?url=${encodeURIComponent(targetUrl)}`;
   }
 
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
-      {cleanUrl ? <OffthreadVideo src={cleanUrl} /> : null}
+      {finalUrl ? <OffthreadVideo src={finalUrl} /> : null}
 
       {safePopups.map((popup, i) => {
         const startSec = Number(popup.start_time);
