@@ -12,7 +12,6 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const HOST = "0.0.0.0";
 
-const DEFAULT_FALLBACK_VIDEO = "https://raw.githubusercontent.com/remotion-dev/template-helloworld/main/public/video.mp4";
 const bundleLocation = path.join(__dirname, "build");
 
 app.use(cors());
@@ -26,6 +25,7 @@ process.on("unhandledRejection", (reason, promise) => {
   console.error("[Unhandled Rejection]:", reason);
 });
 
+// Initialize Cloud Storage Client (Cloudflare R2 / S3)
 const s3Client = new S3Client({
   region: process.env.S3_REGION || "auto",
   endpoint: process.env.S3_ENDPOINT,
@@ -35,6 +35,7 @@ const s3Client = new S3Client({
   },
 });
 
+// Configure Multer for Disk Storage
 const uploadDir = path.join(os.tmpdir(), "uploads");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -42,9 +43,10 @@ if (!fs.existsSync(uploadDir)) {
 
 const upload = multer({
   dest: uploadDir,
-  limits: { fileSize: 500 * 1024 * 1024 },
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
 });
 
+// Clean Markdown links [text](url) -> url
 function cleanMarkdownUrls(obj) {
   if (typeof obj === "string") {
     return obj.replace(/\[(?:[^\]]+)\]\((https?:\/\/[^\)]+)\)/g, "$1");
@@ -60,23 +62,7 @@ function cleanMarkdownUrls(obj) {
   return obj;
 }
 
-// Pre-flight check for external media URLs
-async function validateMediaUrl(url) {
-  try {
-    const response = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(5000) });
-    if (response.ok) return { valid: true, status: response.status };
-
-    // Fallback to ranged GET if server rejects HEAD requests
-    const getResponse = await fetch(url, {
-      headers: { Range: "bytes=0-0" },
-      signal: AbortSignal.timeout(5000),
-    });
-    return { valid: getResponse.ok, status: getResponse.status };
-  } catch (err) {
-    return { valid: false, status: err.name === "TimeoutError" ? 408 : 500, error: err.message };
-  }
-}
-
+// Health check endpoints
 app.get("/", (req, res) => {
   res.status(200).send("Cloud Video Render Engine Server is Running!");
 });
@@ -85,6 +71,7 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", message: "Remotion render engine active" });
 });
 
+// 1. Upload Video Endpoint (Receives file from UI)
 app.post("/upload", upload.single("video"), async (req, res) => {
   let tempFilePath = req.file?.path;
 
@@ -134,6 +121,7 @@ app.post("/upload", upload.single("video"), async (req, res) => {
   }
 });
 
+// 2. Render Video Endpoint (Renders the uploaded video URL)
 app.post("/render", async (req, res) => {
   let tempOutputPath = null;
 
@@ -149,23 +137,12 @@ app.post("/render", async (req, res) => {
     }
 
     let sanitizedProps = props ? cleanMarkdownUrls(props) : {};
-    const warnings = [];
 
-    // Pre-flight check for videoUrl prop
-    if (sanitizedProps.videoUrl && typeof sanitizedProps.videoUrl === "string") {
-      console.log(`[Pre-Flight Check]: Validating media asset ${sanitizedProps.videoUrl}...`);
-      const validation = await validateMediaUrl(sanitizedProps.videoUrl);
-
-      if (!validation.valid) {
-        console.warn(`[Pre-Flight Warning]: Asset unreachable (HTTP ${validation.status}). Swapping to default fallback URL.`);
-        warnings.push({
-          type: "ASSET_SUBSTITUTED",
-          originalUrl: sanitizedProps.videoUrl,
-          reason: `HTTP ${validation.status}`,
-          fallbackUrl: DEFAULT_FALLBACK_VIDEO,
-        });
-        sanitizedProps.videoUrl = DEFAULT_FALLBACK_VIDEO;
-      }
+    if (!sanitizedProps.videoUrl) {
+      return res.status(400).json({
+        error: "Missing videoUrl in props",
+        details: "Please provide the videoUrl returned from the /upload endpoint.",
+      });
     }
 
     const outputFilename = outputPath ? path.basename(outputPath) : `render_${Date.now()}.mp4`;
@@ -178,7 +155,7 @@ app.post("/render", async (req, res) => {
       inputProps: sanitizedProps,
     });
 
-    console.log(`[Render Engine]: Rendering video frames...`);
+    console.log(`[Render Engine]: Rendering video frames for video: ${sanitizedProps.videoUrl}`);
     let lastLoggedProgress = 0;
 
     await renderMedia({
@@ -230,13 +207,11 @@ app.post("/render", async (req, res) => {
       success: true,
       message: "Render completed successfully",
       mediaUrl: mediaUrl,
-      warnings: warnings.length > 0 ? warnings : undefined,
     });
   } catch (error) {
     console.error("[Render Error]:", error);
-    return res.status(422).json({
+    return res.status(500).json({
       error: "Remotion render failed",
-      errorType: "RENDER_EXECUTION_ERROR",
       details: error.message || String(error),
     });
   } finally {
