@@ -39,9 +39,9 @@ export const MainReel: React.FC<MainReelProps> = ({ videoUrl, popups = [] }) => 
 
   let finalUrl = cleanUrl(videoUrl);
 
-  // Fallback to default sample video if no valid remote URL is provided
+  // Fallback to active public sample video if no valid remote URL is provided
   if (!finalUrl) {
-    finalUrl = "https://remotion-assets.s3.eu-central-1.amazonaws.com/BigBuckBunny.mp4";
+    finalUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
   }
 
   return (

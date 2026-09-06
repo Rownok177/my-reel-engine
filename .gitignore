@@ -12,9 +12,13 @@ dist/
 out/
 .next/
 
+# Explicitly track pre-built Remotion bundle
+!build-bundle/
+
 # Environment Files
 .env
 .env*.local
+src/.env
 
 # System & Editor Files
 .DS_Store
@@ -24,5 +28,3 @@ Thumbs.db
 
 # Logs
 *.log
-.env
-src/.env

@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "remotion studio",
-    "build": "remotion bundle src/index.ts build-bundle",
+    "build": "echo 'Skipping server-side bundling'",
+    "bundle:local": "remotion bundle src/index.ts build-bundle",
     "render": "remotion render",
     "upgrade": "remotion upgrade",
     "lint": "eslint src && tsc"
