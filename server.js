@@ -123,27 +123,33 @@ app.post("/upload", upload.single("video"), async (req, res) => {
 
 // 2. Render Video Endpoint (Renders the uploaded video URL)
 app.post("/render", async (req, res) => {
+  // Extend request timeout to 5 minutes for heavy render jobs
+  req.setTimeout(300000);
+
   let tempOutputPath = null;
 
   try {
     const { composition = "MainReel", props, propsPath, outputPath } = req.body;
 
-    if (!composition || (!props && !propsPath)) {
-      return res.status(400).json({
-        error: "Missing required parameters",
-        required: ["composition", "props OR propsPath"],
-        received: req.body,
-      });
-    }
-
     let sanitizedProps = props ? cleanMarkdownUrls(props) : {};
 
-    if (!sanitizedProps.videoUrl) {
+    // Fallback URL resolution: inspects props.videoUrl, props.mediaUrl, body.videoUrl, and body.mediaUrl
+    const videoUrl =
+      sanitizedProps.videoUrl ||
+      sanitizedProps.mediaUrl ||
+      req.body.videoUrl ||
+      req.body.mediaUrl;
+
+    if (!videoUrl) {
       return res.status(400).json({
         error: "Missing videoUrl in props",
-        details: "Please provide the videoUrl returned from the /upload endpoint.",
+        details: "Please provide videoUrl or mediaUrl in props or request body.",
+        receivedBody: req.body,
       });
     }
+
+    // Assign back to sanitizedProps so Remotion receives the parameter correctly
+    sanitizedProps.videoUrl = videoUrl;
 
     const outputFilename = outputPath ? path.basename(outputPath) : `render_${Date.now()}.mp4`;
     tempOutputPath = path.join(os.tmpdir(), outputFilename);
@@ -164,8 +170,8 @@ app.post("/render", async (req, res) => {
       codec: "h264",
       outputLocation: tempOutputPath,
       inputProps: sanitizedProps,
-      concurrency: 1,
-      jpegQuality: 80,
+      concurrency: 1, // Restrict to single thread to prevent Render RAM limit spikes (502 OOM)
+      jpegQuality: 70, // Lower quality buffer to reduce memory footprint
       onProgress: ({ progress }) => {
         const percent = Math.round(progress * 100);
         if (percent >= lastLoggedProgress + 20) {
@@ -177,10 +183,11 @@ app.post("/render", async (req, res) => {
         args: [
           "--no-sandbox",
           "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
+          "--disable-dev-shm-usage", // Force Chromium to use disk space (/tmp) instead of shared memory RAM
           "--disable-gpu",
           "--single-process",
           "--no-zygote",
+          "--js-flags=--max-old-space-size=256", // Enforce maximum V8 heap size to keep memory within container limits
         ],
       },
     });
@@ -225,7 +232,11 @@ app.post("/render", async (req, res) => {
   }
 });
 
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`🚀 [Server] Running on http://${HOST}:${PORT}`);
   console.log(`☁️ [Server] Cloud Storage: ${process.env.S3_BUCKET_NAME}\n`);
 });
+
+// Configure server socket timeouts to prevent 502/504 Bad Gateway dropouts during long renders
+server.timeout = 300000; // 5 minutes
+server.keepAliveTimeout = 120000; // 2 minutes
