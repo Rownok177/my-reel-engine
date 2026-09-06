@@ -16,7 +16,7 @@ const HOST = "0.0.0.0";
 app.use(cors());
 app.use(express.json({ limit: "100mb" }));
 
-// Initialize S3 / Cloud Storage Client (Cloudflare R2)
+// Initialize Cloud Storage Client (Cloudflare R2 / S3)
 const s3Client = new S3Client({
   region: process.env.S3_REGION || "auto",
   endpoint: process.env.S3_ENDPOINT,
@@ -26,7 +26,7 @@ const s3Client = new S3Client({
   },
 });
 
-// Configure Multer for Disk Storage (Prevents RAM spikes on large file uploads)
+// Configure Multer for Disk Storage
 const uploadDir = path.join(os.tmpdir(), "uploads");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -37,7 +37,28 @@ const upload = multer({
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
 });
 
-// Helper: Safely converts markdown links [text](url) -> url without breaking text props
+// Bundle Caching Mechanism to prevent Out-Of-Memory crashes on low-RAM hosts
+const bundleCache = new Map();
+
+function getOrCreateBundle(entryFile) {
+  if (!bundleCache.has(entryFile)) {
+    console.log(`[Render Engine]: Bundling Remotion project from ${entryFile} (Initial cache setup)...`);
+    const bundlePromise = bundle({
+      entryPoint: entryFile,
+      webpackOverride: (config) => config,
+    }).catch((err) => {
+      // Clear cache on bundling failure so next request can retry cleanly
+      bundleCache.delete(entryFile);
+      throw err;
+    });
+    bundleCache.set(entryFile, bundlePromise);
+  } else {
+    console.log(`[Render Engine]: Using cached bundle for ${entryFile}`);
+  }
+  return bundleCache.get(entryFile);
+}
+
+// Clean Markdown links [text](url) -> url
 function cleanMarkdownUrls(obj) {
   if (typeof obj === "string") {
     return obj.replace(/\[(?:[^\]]+)\]\((https?:\/\/[^\)]+)\)/g, "$1");
@@ -53,7 +74,7 @@ function cleanMarkdownUrls(obj) {
   return obj;
 }
 
-// Health check endpoints for Render cold-start polling
+// Health check endpoints
 app.get("/", (req, res) => {
   res.status(200).send("Cloud Video Render Engine Server is Running!");
 });
@@ -62,7 +83,7 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", message: "Remotion render engine active" });
 });
 
-// 1. Direct Cloud Upload Endpoint
+// 1. Upload Video Endpoint
 app.post("/upload", upload.single("video"), async (req, res) => {
   let tempFilePath = req.file?.path;
 
@@ -74,7 +95,7 @@ app.post("/upload", upload.single("video"), async (req, res) => {
     const sanitizedName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_");
     const filename = `raw-uploads/${Date.now()}_${sanitizedName}`;
 
-    console.log(`[Cloud Upload Start]: Uploading ${req.file.originalname} to R2 bucket...`);
+    console.log(`[Cloud Upload Start]: Uploading ${req.file.originalname} to bucket...`);
 
     const fileStream = fs.createReadStream(tempFilePath);
 
@@ -102,7 +123,6 @@ app.post("/upload", upload.single("video"), async (req, res) => {
     console.error("[Cloud Upload Error]:", error);
     return res.status(500).json({ success: false, error: error.message });
   } finally {
-    // Cleanup temp uploaded file from disk
     if (tempFilePath && fs.existsSync(tempFilePath)) {
       try {
         fs.unlinkSync(tempFilePath);
@@ -113,12 +133,12 @@ app.post("/upload", upload.single("video"), async (req, res) => {
   }
 });
 
-// 2. Programmatic Cloud Render Endpoint
+// 2. Render Video Endpoint
 app.post("/render", async (req, res) => {
   let tempOutputPath = null;
 
   try {
-    const { entryPoint, composition, props, propsPath, outputPath } = req.body;
+    const { entryPoint, composition = "MainReel", props, propsPath, outputPath } = req.body;
 
     if (!composition || (!props && !propsPath)) {
       return res.status(400).json({
@@ -128,7 +148,6 @@ app.post("/render", async (req, res) => {
       });
     }
 
-    // Sanitize incoming props and URLs
     let sanitizedProps = props ? cleanMarkdownUrls(props) : {};
 
     const entryFile = entryPoint ? path.resolve(entryPoint) : path.join(__dirname, "src/index.ts");
@@ -136,10 +155,8 @@ app.post("/render", async (req, res) => {
 
     tempOutputPath = path.join(os.tmpdir(), outputFilename);
 
-    console.log(`[Render Engine]: Bundling Remotion project from ${entryFile}...`);
-    const bundled = await bundle({
-      entryPoint: entryFile,
-    });
+    // Re-use cached bundle promise to prevent Webpack re-compilation RAM spikes
+    const bundled = await getOrCreateBundle(entryFile);
 
     console.log(`[Render Engine]: Selecting composition "${composition}"...`);
     const compositionMeta = await selectComposition({
@@ -148,26 +165,27 @@ app.post("/render", async (req, res) => {
       inputProps: sanitizedProps,
     });
 
-    console.log(`[Render Engine]: Rendering video frames (Low-Memory Mode)...`);
+    console.log(`[Render Engine]: Rendering video frames...`);
     await renderMedia({
       composition: compositionMeta,
       serveUrl: bundled,
       codec: "h264",
       outputLocation: tempOutputPath,
       inputProps: sanitizedProps,
-      concurrency: 1, // Strict single-threaded rendering to enforce low RAM usage
+      concurrency: 1, // Restrict to single worker thread to fit within 512MB RAM
       chromiumOptions: {
         args: [
           "--no-sandbox",
           "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage", // Uses /tmp instead of shared memory pool
+          "--disable-dev-shm-usage",
           "--disable-gpu",
           "--single-process",
+          "--no-zygote",
         ],
       },
     });
 
-    console.log(`[Render Engine]: Uploading rendered MP4 to Cloudflare R2...`);
+    console.log(`[Render Engine]: Uploading rendered MP4 to storage...`);
     const cloudRenderKey = `renders/${Date.now()}_${outputFilename}`;
     const fileStream = fs.createReadStream(tempOutputPath);
 
@@ -197,7 +215,6 @@ app.post("/render", async (req, res) => {
       details: error.message,
     });
   } finally {
-    // Cleanup temporary output video from OS temp directory
     if (tempOutputPath && fs.existsSync(tempOutputPath)) {
       try {
         fs.unlinkSync(tempOutputPath);
