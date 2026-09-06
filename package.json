@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "remotion studio",
-    "build": "remotion bundle",
+    "build": "remotion bundle src/index.ts build-bundle",
     "render": "remotion render",
     "upgrade": "remotion upgrade",
     "lint": "eslint src && tsc"

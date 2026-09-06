@@ -6,12 +6,14 @@ const os = require("os");
 const cors = require("cors");
 const multer = require("multer");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
-const { bundle } = require("@remotion/bundler");
 const { renderMedia, selectComposition } = require("@remotion/renderer");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const HOST = "0.0.0.0";
+
+// Pre-bundled static build location generated via 'npm run build'
+const bundleLocation = path.join(__dirname, "build-bundle");
 
 app.use(cors());
 app.use(express.json({ limit: "100mb" }));
@@ -45,27 +47,6 @@ const upload = multer({
   dest: uploadDir,
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
 });
-
-// Bundle Caching Mechanism to prevent Out-Of-Memory crashes on low-RAM hosts
-const bundleCache = new Map();
-
-function getOrCreateBundle(entryFile) {
-  if (!bundleCache.has(entryFile)) {
-    console.log(`[Render Engine]: Bundling Remotion project from ${entryFile} (Initial cache setup)...`);
-    const bundlePromise = bundle({
-      entryPoint: entryFile,
-      webpackOverride: (config) => config,
-    }).catch((err) => {
-      // Clear cache on bundling failure so next request can retry cleanly
-      bundleCache.delete(entryFile);
-      throw err;
-    });
-    bundleCache.set(entryFile, bundlePromise);
-  } else {
-    console.log(`[Render Engine]: Using cached bundle for ${entryFile}`);
-  }
-  return bundleCache.get(entryFile);
-}
 
 // Clean Markdown links [text](url) -> url
 function cleanMarkdownUrls(obj) {
@@ -147,7 +128,7 @@ app.post("/render", async (req, res) => {
   let tempOutputPath = null;
 
   try {
-    const { entryPoint, composition = "MainReel", props, propsPath, outputPath } = req.body;
+    const { composition = "MainReel", props, propsPath, outputPath } = req.body;
 
     if (!composition || (!props && !propsPath)) {
       return res.status(400).json({
@@ -158,18 +139,13 @@ app.post("/render", async (req, res) => {
     }
 
     let sanitizedProps = props ? cleanMarkdownUrls(props) : {};
-
-    const entryFile = entryPoint ? path.resolve(entryPoint) : path.join(__dirname, "src/index.ts");
     const outputFilename = outputPath ? path.basename(outputPath) : `render_${Date.now()}.mp4`;
 
     tempOutputPath = path.join(os.tmpdir(), outputFilename);
 
-    // Re-use cached bundle promise to prevent Webpack re-compilation RAM spikes
-    const bundled = await getOrCreateBundle(entryFile);
-
     console.log(`[Render Engine]: Selecting composition "${composition}"...`);
     const compositionMeta = await selectComposition({
-      serveUrl: bundled,
+      serveUrl: bundleLocation,
       id: composition,
       inputProps: sanitizedProps,
     });
@@ -179,7 +155,7 @@ app.post("/render", async (req, res) => {
 
     await renderMedia({
       composition: compositionMeta,
-      serveUrl: bundled,
+      serveUrl: bundleLocation,
       codec: "h264",
       outputLocation: tempOutputPath,
       inputProps: sanitizedProps,
