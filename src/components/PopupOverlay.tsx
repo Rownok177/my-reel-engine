@@ -1,88 +1,173 @@
 import React from "react";
-import { useCurrentFrame, useVideoConfig, spring, interpolate } from "remotion";
+import { useCurrentFrame, useVideoConfig, spring, interpolate, AbsoluteFill } from "remotion";
 import { PopupItem } from "../types";
 
-export const PopupOverlay: React.FC<{ item: PopupItem }> = ({ item }) => {
+const POSITION_STYLES: Record<string, React.CSSProperties> = {
+  top: { justifyContent: "flex-start", alignItems: "center", paddingTop: "10vh" },
+  "top-left": { justifyContent: "flex-start", alignItems: "flex-start", paddingTop: "10vh", paddingLeft: "30px" },
+  "top-right": { justifyContent: "flex-start", alignItems: "flex-end", paddingTop: "10vh", paddingRight: "30px" },
+  center: { justifyContent: "center", alignItems: "center" },
+  "center-left": { justifyContent: "center", alignItems: "flex-start", paddingLeft: "30px" },
+  "center-right": { justifyContent: "center", alignItems: "flex-end", paddingRight: "30px" },
+  bottom: { justifyContent: "flex-end", alignItems: "center", paddingBottom: "10vh" },
+  "bottom-left": { justifyContent: "flex-end", alignItems: "flex-start", paddingBottom: "10vh", paddingLeft: "30px" },
+  "bottom-right": { justifyContent: "flex-end", alignItems: "flex-end", paddingBottom: "10vh", paddingRight: "30px" },
+};
+
+const THEME_STYLES: Record<
+  string,
+  {
+    container: React.CSSProperties;
+    headline: React.CSSProperties;
+    subtext: React.CSSProperties;
+  }
+> = {
+  bold_clean: {
+    container: {
+      backgroundColor: "rgba(15, 23, 42, 0.90)",
+      border: "2px solid rgba(74, 222, 128, 0.8)",
+      borderRadius: 20,
+      padding: "20px 32px",
+      boxShadow: "0 20px 30px rgba(0, 0, 0, 0.6)",
+      backdropFilter: "blur(10px)",
+      maxWidth: "85%",
+    },
+    headline: {
+      fontSize: 48,
+      fontWeight: 900,
+      color: "#FFFFFF",
+      textAlign: "center",
+      textTransform: "uppercase",
+      letterSpacing: "0.02em",
+    },
+    subtext: {
+      fontSize: 28,
+      fontWeight: 700,
+      color: "#4ADE80",
+      textAlign: "center",
+      marginTop: 8,
+      textTransform: "uppercase",
+    },
+  },
+  youtube_shorts: {
+    container: {
+      backgroundColor: "rgba(0, 0, 0, 0.80)",
+      borderRadius: 16,
+      padding: "18px 28px",
+      border: "2px solid rgba(255, 255, 255, 0.3)",
+      maxWidth: "90%",
+    },
+    headline: {
+      fontSize: 54,
+      fontWeight: 900,
+      color: "#FACC15",
+      textAlign: "center",
+      lineHeight: 1.1,
+      textShadow: "-3px 3px 0 #000, 3px 3px 0 #000, 3px -3px 0 #000, -3px -3px 0 #000",
+    },
+    subtext: {
+      fontSize: 30,
+      fontWeight: 800,
+      color: "#FFFFFF",
+      textAlign: "center",
+      marginTop: 8,
+      textShadow: "-2px 2px 0 #000, 2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000",
+    },
+  },
+};
+
+export const PopupOverlay: React.FC<{ item: PopupItem; durationInFrames: number }> = ({
+  item,
+  durationInFrames,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const entrance = spring({
+  // Entrance animation
+  const springVal = spring({
     frame,
     fps,
     config: { damping: 12, stiffness: 100 },
   });
 
-  let transformStyle = `scale(${entrance})`;
+  // Fade out transition
+  const fadeFrames = Math.max(1, Math.min(5, Math.floor(durationInFrames / 3)));
+  const opacity = interpolate(
+    frame,
+    [0, fadeFrames, Math.max(fadeFrames, durationInFrames - fadeFrames), durationInFrames],
+    [0, 1, 1, 0],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+
+  let transformStyle = `scale(${springVal})`;
   if (item.animationType === "slide") {
-    const slideX = interpolate(entrance, [0, 1], [-100, 0]);
+    const slideX = interpolate(springVal, [0, 1], [-100, 0]);
     transformStyle = `translateX(${slideX}px)`;
   } else if (item.animationType === "zoom-out") {
-    const scale = interpolate(entrance, [0, 1], [1.5, 1]);
+    const scale = interpolate(springVal, [0, 1], [1.3, 1]);
     transformStyle = `scale(${scale})`;
   }
 
-  const positionClasses: Record<string, React.CSSProperties> = {
-    "top-left": { top: 60, left: 60 },
-    "top-right": { top: 60, right: 60 },
-    center: { top: "45%", left: "50%", transform: `translate(-50%, -50%) ${transformStyle}` },
-    bottom: { bottom: 80, left: "50%", transform: `translateX(-50%) ${transformStyle}` },
-  };
-
-  const selectedPos = positionClasses[item.position || "center"] || positionClasses.center;
+  const positionStyle = POSITION_STYLES[item.position || "center"] || POSITION_STYLES.center;
+  const activeTheme = THEME_STYLES[item.theme || "bold_clean"] || THEME_STYLES.bold_clean;
 
   return (
-    <div
+    <AbsoluteFill
       style={{
-        position: "absolute",
-        zIndex: 10,
-        padding: "16px 24px",
-        borderRadius: "12px",
-        backgroundColor: item.bgColor || "rgba(15, 23, 42, 0.92)",
-        border: `2px solid ${item.borderColor || "#4ADE80"}`,
-        boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
-        transform: selectedPos.transform || transformStyle,
-        ...selectedPos,
+        display: "flex",
+        flexDirection: "column",
+        pointerEvents: "none",
+        paddingLeft: "20px",
+        paddingRight: "20px",
+        ...positionStyle,
       }}
     >
-      {item.badgeText && (
-        <span
-          style={{
-            fontSize: "12px",
-            fontWeight: "bold",
-            color: item.borderColor || "#4ADE80",
-            textTransform: "uppercase",
-            letterSpacing: "1px",
-            display: "block",
-            marginBottom: "4px",
-          }}
-        >
-          {item.badgeText}
-        </span>
-      )}
-      <h2
+      <div
         style={{
-          margin: "4px 0",
-          fontSize: "28px",
-          fontWeight: "800",
-          color: item.textColor || "#FFFFFF",
-          fontFamily: "sans-serif",
+          opacity,
+          transform: transformStyle,
+          ...activeTheme.container,
+          ...(item.bgColor ? { backgroundColor: item.bgColor } : {}),
+          ...(item.borderColor ? { borderColor: item.borderColor } : {}),
         }}
       >
-        {item.headline}
-      </h2>
-      {item.subtext && (
-        <p
+        {item.badgeText && (
+          <span
+            style={{
+              fontSize: "14px",
+              fontWeight: "bold",
+              color: item.borderColor || "#4ADE80",
+              textTransform: "uppercase",
+              letterSpacing: "1px",
+              display: "block",
+              textAlign: "center",
+              marginBottom: "4px",
+            }}
+          >
+            {item.badgeText}
+          </span>
+        )}
+        <h2
           style={{
-            margin: 0,
-            fontSize: "16px",
-            fontWeight: "600",
-            color: item.subtextColor || "#4ADE80",
-            fontFamily: "sans-serif",
+            margin: "0",
+            ...activeTheme.headline,
+            ...(item.textColor ? { color: item.textColor } : {}),
           }}
         >
-          {item.subtext}
-        </p>
-      )}
-    </div>
+          {item.headline}
+        </h2>
+        {item.subtext && (
+          <p
+            style={{
+              margin: "0",
+              ...activeTheme.subtext,
+              ...(item.subtextColor ? { color: item.subtextColor } : {}),
+            }}
+          >
+            {item.subtext}
+          </p>
+        )}
+      </div>
+    </AbsoluteFill>
   );
 };

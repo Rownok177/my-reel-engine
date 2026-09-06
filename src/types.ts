@@ -1,13 +1,24 @@
 export interface PopupItem {
+  headline: string;
+  subtext?: string;
+  badgeText?: string;
+  position?:
+    | "top"
+    | "top-left"
+    | "top-right"
+    | "center"
+    | "center-left"
+    | "center-right"
+    | "bottom"
+    | "bottom-left"
+    | "bottom-right"
+    | string;
+  theme?: "bold_clean" | "youtube_shorts" | string;
+  animationType?: "bounce" | "slide" | "zoom-out" | "spring";
   start_time: number;
   end_time?: number;
   start_frame?: number;
   duration_in_frames?: number;
-  headline: string;
-  subtext?: string;
-  badgeText?: string;
-  position?: "top-left" | "top-right" | "center" | "bottom" | "bottom-left" | "bottom-right";
-  animationType?: "bounce" | "slide" | "zoom-out" | "spring";
   textColor?: string;
   subtextColor?: string;
   bgColor?: string;
@@ -24,7 +35,7 @@ export interface LowerThirdItem {
   duration_in_frames?: number;
 }
 
-export interface MainReelProps {
+export interface MainReelProps extends Record<string, unknown> {
   videoUrl: string;
   popups?: PopupItem[];
   lower_thirds?: LowerThirdItem[];
