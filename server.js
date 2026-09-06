@@ -12,8 +12,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const HOST = "0.0.0.0";
 
-// Pre-bundled static build location generated via 'npm run build'
-const bundleLocation = path.join(__dirname, "build-bundle");
+// Pre-bundled static build location generated locally
+const bundleLocation = path.join(__dirname, "build");
 
 app.use(cors());
 app.use(express.json({ limit: "100mb" }));

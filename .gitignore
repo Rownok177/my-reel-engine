@@ -7,13 +7,10 @@ venv/
 __pycache__/
 
 # Build & Export Outputs
-build/
+!build/
 dist/
 out/
 .next/
-
-# Explicitly track pre-built Remotion bundle
-!build-bundle/
 
 # Environment Files
 .env
