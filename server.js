@@ -16,6 +16,15 @@ const HOST = "0.0.0.0";
 app.use(cors());
 app.use(express.json({ limit: "100mb" }));
 
+// Prevent uncaught exceptions from killing the process silently
+process.on("uncaughtException", (err) => {
+  console.error("[Fatal Uncaught Exception]:", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[Unhandled Rejection]:", reason);
+});
+
 // Initialize Cloud Storage Client (Cloudflare R2 / S3)
 const s3Client = new S3Client({
   region: process.env.S3_REGION || "auto",
@@ -166,18 +175,28 @@ app.post("/render", async (req, res) => {
     });
 
     console.log(`[Render Engine]: Rendering video frames...`);
+    let lastLoggedProgress = 0;
+
     await renderMedia({
       composition: compositionMeta,
       serveUrl: bundled,
       codec: "h264",
       outputLocation: tempOutputPath,
       inputProps: sanitizedProps,
-      concurrency: 1, // Restrict to single worker thread to fit within 512MB RAM
+      concurrency: 1, // Restrict to single worker thread for low-RAM hosts
+      jpegQuality: 80, // Reduces memory pressure and speeds up frame encoding
+      onProgress: ({ progress }) => {
+        const percent = Math.round(progress * 100);
+        if (percent >= lastLoggedProgress + 20) {
+          console.log(`[Render Progress]: ${percent}%`);
+          lastLoggedProgress = percent;
+        }
+      },
       chromiumOptions: {
         args: [
           "--no-sandbox",
           "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
+          "--disable-dev-shm-usage", // Avoids /dev/shm shared memory crashes
           "--disable-gpu",
           "--single-process",
           "--no-zygote",
@@ -212,7 +231,7 @@ app.post("/render", async (req, res) => {
     console.error("[Render Error]:", error);
     return res.status(500).json({
       error: "Remotion render failed",
-      details: error.message,
+      details: error.message || String(error),
     });
   } finally {
     if (tempOutputPath && fs.existsSync(tempOutputPath)) {
