@@ -62,6 +62,33 @@ function cleanMarkdownUrls(obj) {
   return obj;
 }
 
+// Unwraps proxy loops and normalizes host.docker.internal to localhost for local Chromium
+function unwrapProxyUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== "string") return rawUrl;
+  let url = rawUrl.trim();
+  let prev = "";
+
+  while (url !== prev) {
+    prev = url;
+    try {
+      url = decodeURIComponent(url);
+    } catch {
+      // Continue if string is already decoded
+    }
+    const match = url.match(/(?:proxy-video\?url=|proxy\?src=)(https?:\/\/[^\s&]+)/i);
+    if (match && match[1]) {
+      url = match[1].trim();
+    }
+  }
+
+  // Rewrite host.docker.internal to localhost for local host Chromium renders
+  if (url.includes("host.docker.internal")) {
+    url = url.replace(/host\.docker\.internal/g, "localhost");
+  }
+
+  return url;
+}
+
 // Health check endpoints
 app.get("/", (req, res) => {
   res.status(200).send("Cloud Video Render Engine Server is Running!");
@@ -106,6 +133,7 @@ app.post("/upload", upload.single("video"), async (req, res) => {
       fileName: filename,
       originalName: req.file.originalname,
       mediaUrl: mediaUrl,
+      videoUrl: mediaUrl,
     });
   } catch (error) {
     console.error("[Cloud Upload Error]:", error);
@@ -129,16 +157,28 @@ app.post("/render", async (req, res) => {
   let tempOutputPath = null;
 
   try {
-    const { composition = "MainReel", props, propsPath, outputPath } = req.body;
+    const { composition = "MainReel", props, outputPath } = req.body;
 
-    let sanitizedProps = props ? cleanMarkdownUrls(props) : {};
+    // Handle case where n8n sends props as a stringified JSON string
+    let parsedProps = props;
+    if (typeof props === "string") {
+      try {
+        parsedProps = JSON.parse(props);
+      } catch (e) {
+        console.warn("[Render Engine]: Failed to parse stringified props, using raw string value.");
+      }
+    }
 
-    // Fallback URL resolution: inspects props.videoUrl, props.mediaUrl, body.videoUrl, and body.mediaUrl
-    const videoUrl =
+    let sanitizedProps = parsedProps ? cleanMarkdownUrls(parsedProps) : {};
+
+    // Extract raw video URL across all possible JSON payload keys
+    let rawVideoUrl =
       sanitizedProps.videoUrl ||
       sanitizedProps.mediaUrl ||
       req.body.videoUrl ||
       req.body.mediaUrl;
+
+    const videoUrl = unwrapProxyUrl(rawVideoUrl);
 
     if (!videoUrl) {
       return res.status(400).json({
@@ -148,8 +188,25 @@ app.post("/render", async (req, res) => {
       });
     }
 
-    // Assign back to sanitizedProps so Remotion receives the parameter correctly
+    // Safely parse overlays if provided as stringified JSON from n8n
+    let rawOverlays =
+      sanitizedProps.overlays ||
+      req.body.overlays ||
+      sanitizedProps.popups ||
+      req.body.plan?.popups;
+
+    if (typeof rawOverlays === "string") {
+      try {
+        rawOverlays = JSON.parse(rawOverlays);
+      } catch (e) {
+        console.warn("[Render Engine]: Failed to parse stringified overlays array.");
+      }
+    }
+
+    // Standardize props passed to Remotion Composition
     sanitizedProps.videoUrl = videoUrl;
+    sanitizedProps.overlays = Array.isArray(rawOverlays) ? rawOverlays : [];
+    sanitizedProps.sessionId = sanitizedProps.sessionId || req.body.sessionId || "session_default";
 
     const outputFilename = outputPath ? path.basename(outputPath) : `render_${Date.now()}.mp4`;
     tempOutputPath = path.join(os.tmpdir(), outputFilename);
@@ -161,7 +218,7 @@ app.post("/render", async (req, res) => {
       inputProps: sanitizedProps,
     });
 
-    console.log(`[Render Engine]: Rendering video frames for video: ${sanitizedProps.videoUrl}`);
+    console.log(`[Render Engine]: Rendering frames for source video: ${sanitizedProps.videoUrl}`);
     let lastLoggedProgress = 0;
 
     await renderMedia({
@@ -170,8 +227,8 @@ app.post("/render", async (req, res) => {
       codec: "h264",
       outputLocation: tempOutputPath,
       inputProps: sanitizedProps,
-      concurrency: 1, // Restrict to single thread to prevent Render RAM limit spikes (502 OOM)
-      jpegQuality: 70, // Lower quality buffer to reduce memory footprint
+      concurrency: 1, // Restrict to single thread to prevent memory overflow
+      jpegQuality: 70,
       onProgress: ({ progress }) => {
         const percent = Math.round(progress * 100);
         if (percent >= lastLoggedProgress + 20) {
@@ -183,11 +240,11 @@ app.post("/render", async (req, res) => {
         args: [
           "--no-sandbox",
           "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage", // Force Chromium to use disk space (/tmp) instead of shared memory RAM
+          "--disable-dev-shm-usage",
           "--disable-gpu",
           "--single-process",
           "--no-zygote",
-          "--js-flags=--max-old-space-size=256", // Enforce maximum V8 heap size to keep memory within container limits
+          "--js-flags=--max-old-space-size=256",
         ],
       },
     });
@@ -214,6 +271,7 @@ app.post("/render", async (req, res) => {
       success: true,
       message: "Render completed successfully",
       mediaUrl: mediaUrl,
+      renderedVideoUrl: mediaUrl,
     });
   } catch (error) {
     console.error("[Render Error]:", error);
