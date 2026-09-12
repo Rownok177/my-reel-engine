@@ -26,7 +26,12 @@ export interface PopupData {
     | "bottom-right"
     | string;
 
-  animationType?: "bounce" | "slide" | "zoom-out" | "spring" | string;
+  animationType?:
+    | "bounce"
+    | "slide"
+    | "zoom-out"
+    | "spring"
+    | string;
 
   textColor?: string;
   subtextColor?: string;
@@ -35,13 +40,13 @@ export interface PopupData {
 
   start_time: number | string;
   end_time?: number | string;
-
   start_frame?: number;
   end_frame?: number;
   duration_in_frames?: number;
 }
 
-export interface MainReelProps extends Record<string, unknown> {
+export interface MainReelProps
+  extends Record<string, unknown> {
   videoUrl: string;
   popups: PopupData[];
 }
@@ -51,7 +56,9 @@ export type MainCompositionProps = MainReelProps;
 const parseTimeToSeconds = (
   time: string | number | undefined
 ): number => {
-  if (time === undefined || time === null) return 0;
+  if (time === undefined || time === null) {
+    return 0;
+  }
 
   if (typeof time === "number") {
     return time;
@@ -59,7 +66,9 @@ const parseTimeToSeconds = (
 
   const str = String(time).trim();
 
-  if (!str) return 0;
+  if (!str) {
+    return 0;
+  }
 
   if (str.includes(":")) {
     const parts = str.split(":").map(Number);
@@ -83,13 +92,22 @@ const parseTimeToSeconds = (
 };
 
 /*
- * Mobile-safe popup zones.
+ * Explicit mobile popup zones.
  *
- * The main change is that "center" no longer means the
- * exact center of the video.
+ * These positions are based on the 1080 x 1920
+ * portrait composition.
  *
- * The center zones are intentionally moved lower so that
- * they are less likely to cover a person's face.
+ * top:
+ *      approximately 10% from top
+ *
+ * center:
+ *      approximately 62% from top
+ *      This is intentionally LOWER than the
+ *      mathematical center so it is less likely
+ *      to cover a person's face.
+ *
+ * bottom:
+ *      approximately 8% from bottom
  */
 const POSITION_STYLES: Record<
   string,
@@ -99,81 +117,78 @@ const POSITION_STYLES: Record<
    * TOP
    */
   top: {
-    justifyContent: "flex-start",
-    alignItems: "center",
-    paddingTop: "8%",
-    paddingLeft: "20px",
-    paddingRight: "20px",
+    position: "absolute",
+    top: "10%",
+    left: "50%",
+    width: "80%",
   },
 
   "top-left": {
-    justifyContent: "flex-start",
-    alignItems: "flex-start",
-    paddingTop: "8%",
-    paddingLeft: "30px",
+    position: "absolute",
+    top: "10%",
+    left: "5%",
+    width: "80%",
   },
 
   "top-right": {
-    justifyContent: "flex-start",
+    position: "absolute",
+    top: "10%",
+    right: "5%",
+    width: "80%",
     alignItems: "flex-end",
-    paddingTop: "8%",
-    paddingRight: "30px",
   },
 
   /*
-   * CENTER
+   * CENTER SAFE ZONE
    *
-   * Instead of placing these popups at 50%,
-   * move them to roughly the lower-middle area.
-   *
-   * This keeps the popup above the true bottom zone,
-   * while leaving the face area much more visible.
+   * This is NOT the exact center.
+   * It is deliberately moved downward.
    */
   center: {
-    justifyContent: "flex-start",
-    alignItems: "center",
-    paddingTop: "61%",
-    paddingLeft: "20px",
-    paddingRight: "20px",
+    position: "absolute",
+    top: "62%",
+    left: "50%",
+    width: "80%",
   },
 
   "center-left": {
-    justifyContent: "flex-start",
-    alignItems: "flex-start",
-    paddingTop: "61%",
-    paddingLeft: "30px",
+    position: "absolute",
+    top: "62%",
+    left: "5%",
+    width: "80%",
   },
 
   "center-right": {
-    justifyContent: "flex-start",
+    position: "absolute",
+    top: "62%",
+    right: "5%",
+    width: "80%",
     alignItems: "flex-end",
-    paddingTop: "61%",
-    paddingRight: "30px",
   },
 
   /*
    * BOTTOM
    */
   bottom: {
-    justifyContent: "flex-end",
-    alignItems: "center",
-    paddingBottom: "10%",
-    paddingLeft: "20px",
-    paddingRight: "20px",
+    position: "absolute",
+    bottom: "8%",
+    left: "50%",
+    width: "80%",
   },
 
   "bottom-left": {
-    justifyContent: "flex-end",
-    alignItems: "flex-start",
-    paddingBottom: "10%",
-    paddingLeft: "30px",
+    position: "absolute",
+    bottom: "8%",
+    left: "5%",
+    width: "80%",
   },
 
   "bottom-right": {
-    justifyContent: "flex-end",
+    position: "absolute",
+    bottom: "8%",
+    right: "5%",
+    width: "80%",
     alignItems: "flex-end",
-    paddingBottom: "10%",
-    paddingRight: "30px",
   },
 };
 
@@ -220,7 +235,7 @@ const Popup: React.FC<{
     }
   );
 
-  let transformStyle = "";
+  let animationTransform = "";
 
   const animType =
     popup.animationType || "bounce";
@@ -238,7 +253,8 @@ const Popup: React.FC<{
       },
     });
 
-    transformStyle = `scale(${scaleSpring})`;
+    animationTransform =
+      `scale(${scaleSpring})`;
   } else if (
     animType === "zoom-out"
   ) {
@@ -252,7 +268,8 @@ const Popup: React.FC<{
       }
     );
 
-    transformStyle = `scale(${scaleZoom})`;
+    animationTransform =
+      `scale(${scaleZoom})`;
   } else if (
     animType === "slide"
   ) {
@@ -266,7 +283,7 @@ const Popup: React.FC<{
       }
     );
 
-    transformStyle =
+    animationTransform =
       `translateY(${translateY}px)`;
   } else {
     const scaleDefault = interpolate(
@@ -279,7 +296,7 @@ const Popup: React.FC<{
       }
     );
 
-    transformStyle =
+    animationTransform =
       `scale(${scaleDefault})`;
   }
 
@@ -288,6 +305,24 @@ const Popup: React.FC<{
       popup.position || "center"
     ] ||
     POSITION_STYLES.center;
+
+  /*
+   * Positioning transform is kept separate
+   * from the animation transform.
+   *
+   * This prevents the animation from replacing
+   * the horizontal centering.
+   */
+  let positionalTransform = "";
+
+  if (
+    popup.position === "top" ||
+    popup.position === "center" ||
+    popup.position === "bottom"
+  ) {
+    positionalTransform =
+      "translateX(-50%)";
+  }
 
   const containerStyle: React.CSSProperties = {
     backgroundColor:
@@ -316,27 +351,35 @@ const Popup: React.FC<{
 
     maxWidth: "80%",
 
-    /*
-     * Prevent extremely long text from
-     * overflowing the mobile frame.
-     */
     boxSizing: "border-box",
+
+    transform:
+      `${positionalTransform} ${animationTransform}`.trim(),
   };
 
+  /*
+   * Remove only the transform property from
+   * POSITION_STYLES without creating an unused
+   * variable.
+   */
+  const positionWithoutTransform: React.CSSProperties =
+    {
+      ...positionStyle,
+    };
+
+  delete positionWithoutTransform.transform;
+
   return (
-    <AbsoluteFill
+    <div
       style={{
-        display: "flex",
-        flexDirection: "column",
+        ...positionWithoutTransform,
         pointerEvents: "none",
         boxSizing: "border-box",
-        ...positionStyle,
       }}
     >
       <div
         style={{
           opacity,
-          transform: transformStyle,
           ...containerStyle,
         }}
       >
@@ -391,7 +434,7 @@ const Popup: React.FC<{
           </div>
         ) : null}
       </div>
-    </AbsoluteFill>
+    </div>
   );
 };
 
@@ -411,9 +454,6 @@ export const MainReel: React.FC<
   let cleanUrl =
     String(videoUrl || "").trim();
 
-  /*
-   * Fallback video protection.
-   */
   if (
     !cleanUrl ||
     cleanUrl === "undefined" ||
@@ -433,6 +473,7 @@ export const MainReel: React.FC<
     <AbsoluteFill
       style={{
         backgroundColor: "black",
+        overflow: "hidden",
       }}
     >
       {cleanUrl ? (
@@ -445,26 +486,23 @@ export const MainReel: React.FC<
             )
           }
           style={{
+            position: "absolute",
             width: "100%",
             height: "100%",
 
             /*
-             * IMPORTANT:
-             * "cover" fills the entire 1080x1920
-             * mobile frame.
-             *
-             * Landscape source videos will be
-             * cropped on the left/right instead
-             * of producing letterboxing.
+             * Fill the complete 1080 x 1920
+             * portrait composition.
              */
             objectFit: "cover",
 
             /*
-             * Keep the middle of the source visible.
-             * This is generally the safest choice
-             * for talking-head videos.
+             * Crop from the center of the
+             * source video.
              */
-            objectPosition: "center center",
+            objectPosition: "50% 50%",
+
+            display: "block",
           }}
         />
       ) : null}
