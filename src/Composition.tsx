@@ -11,7 +11,6 @@ import {
 
 export interface PopupData {
   headline: string;
-  subtext?: string;
   badgeText?: string;
 
   position?:
@@ -34,7 +33,6 @@ export interface PopupData {
     | string;
 
   textColor?: string;
-  subtextColor?: string;
   bgColor?: string;
   borderColor?: string;
 
@@ -392,8 +390,7 @@ const Popup: React.FC<{
               color:
                 popup.borderColor ||
                 "#4ADE80",
-              textTransform: "uppercase",
-              marginBottom: 6,
+                marginBottom: 6,
             }}
           >
             {popup.badgeText}
@@ -409,30 +406,13 @@ const Popup: React.FC<{
               "#FFFFFF",
             textAlign: "center",
             lineHeight: 1.1,
-            textTransform: "uppercase",
             wordBreak: "break-word",
+            overflowWrap: "anywhere",
           }}
         >
           {popup.headline}
         </div>
 
-        {popup.subtext ? (
-          <div
-            style={{
-              fontSize: 26,
-              fontWeight: 700,
-              color:
-                popup.subtextColor ||
-                "#4ADE80",
-              textAlign: "center",
-              marginTop: 6,
-              lineHeight: 1.15,
-              wordBreak: "break-word",
-            }}
-          >
-            {popup.subtext}
-          </div>
-        ) : null}
       </div>
     </div>
   );
