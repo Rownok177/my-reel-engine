@@ -9,9 +9,17 @@ import {
   spring,
 } from "remotion";
 
+export type PopupTheme = 'bold_clean' | 'bangla_reel';
+
+export type HighlightColor = 'green' | 'red' | 'blue' | 'yellow';
+
 export interface PopupData {
   headline: string;
   badgeText?: string;
+  theme?: PopupTheme | string;
+  highlightColor?: HighlightColor | string;
+  highlightText?: string;
+  fontFamily?: string;
 
   position?:
     | "top"
@@ -190,6 +198,81 @@ const POSITION_STYLES: Record<
   },
 };
 
+const HIGHLIGHT_COLORS: Record<string, string> = {
+  green: '#B7F000',
+  red: '#FF3B30',
+  blue: '#28A9FF',
+  yellow: '#FFD60A',
+};
+
+function getHighlightColor(value?: string) {
+  return HIGHLIGHT_COLORS[String(value || 'green').toLowerCase()] || HIGHLIGHT_COLORS.green;
+}
+
+function splitBanglaReelText(headline: string, requestedHighlight?: string) {
+  const text = String(headline || '').trim();
+  if (!text) return { before: '', highlight: '', after: '' };
+
+  const requested = String(requestedHighlight || '').trim();
+  if (requested) {
+    const index = text.lastIndexOf(requested);
+    if (index >= 0) {
+      return {
+        before: text.slice(0, index),
+        highlight: requested,
+        after: text.slice(index + requested.length),
+      };
+    }
+  }
+
+  const parts = text.split(/\s+/);
+  if (parts.length <= 2) {
+    return { before: '', highlight: text, after: '' };
+  }
+
+  const highlightCount = parts.length >= 8 ? 2 : 1;
+  const highlight = parts.slice(-highlightCount).join(' ');
+  const before = parts.slice(0, -highlightCount).join(' ');
+  return { before, highlight, after: '' };
+}
+
+function BanglaReelHeadline({ popup }: { popup: PopupData }) {
+  const { before, highlight, after } = splitBanglaReelText(popup.headline, popup.highlightText);
+  const accent = getHighlightColor(popup.highlightColor);
+
+  return (
+    <div
+      style={{
+        fontFamily: popup.fontFamily || '"Hind Siliguri", "Noto Sans Bengali", sans-serif',
+        fontSize: 56,
+        fontWeight: 800,
+        lineHeight: 1.02,
+        textAlign: 'center',
+        wordBreak: 'break-word',
+        textShadow: '0 4px 12px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9)',
+        maxWidth: '92%',
+        margin: '0 auto',
+      }}
+    >
+      {before ? <span style={{ color: '#FFFFFF' }}>{before} </span> : null}
+      {highlight ? (
+        <span
+          style={{
+            color: accent,
+            fontWeight: 900,
+            fontSize: '1.28em',
+            display: 'inline-block',
+            textShadow: '0 5px 16px rgba(0,0,0,0.8)',
+          }}
+        >
+          {highlight}
+        </span>
+      ) : null}
+      {after ? <span style={{ color: '#FFFFFF' }}> {after}</span> : null}
+    </div>
+  );
+}
+
 const Popup: React.FC<{
   popup: PopupData;
   durationInFrames: number;
@@ -322,37 +405,21 @@ const Popup: React.FC<{
       "translateX(-50%)";
   }
 
+  const isBanglaReel = popup.theme === 'bangla_reel';
+
   const containerStyle: React.CSSProperties = {
-    backgroundColor:
-      popup.bgColor ||
-      "rgba(15, 23, 42, 0.92)",
-
-    border:
-      `2px solid ${
-        popup.borderColor ||
-        "#4ADE80"
-      }`,
-
-    borderRadius: 20,
-
-    padding: "18px 30px",
-
-    boxShadow:
-      "0 20px 30px rgba(0,0,0,0.5)",
-
-    backdropFilter:
-      "blur(10px)",
-
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-
-    maxWidth: "80%",
-
-    boxSizing: "border-box",
-
-    transform:
-      `${positionalTransform} ${animationTransform}`.trim(),
+    backgroundColor: isBanglaReel ? 'transparent' : (popup.bgColor || 'rgba(15, 23, 42, 0.92)'),
+    border: isBanglaReel ? 'none' : `2px solid ${popup.borderColor || '#4ADE80'}`,
+    borderRadius: isBanglaReel ? 0 : 20,
+    padding: isBanglaReel ? '10px 18px' : '18px 30px',
+    boxShadow: isBanglaReel ? 'none' : '0 20px 30px rgba(0,0,0,0.5)',
+    backdropFilter: isBanglaReel ? 'none' : 'blur(10px)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    maxWidth: isBanglaReel ? '92%' : '80%',
+    boxSizing: 'border-box',
+    transform: `${positionalTransform} ${animationTransform}`.trim(),
   };
 
   /*
@@ -397,21 +464,24 @@ const Popup: React.FC<{
           </div>
         ) : null}
 
-        <div
-          style={{
-            fontSize: 48,
-            fontWeight: 900,
-            color:
-              popup.textColor ||
-              "#FFFFFF",
-            textAlign: "center",
-            lineHeight: 1.1,
-            wordBreak: "break-word",
-            overflowWrap: "anywhere",
-          }}
-        >
-          {popup.headline}
-        </div>
+        {isBanglaReel ? (
+          <BanglaReelHeadline popup={{ ...popup, highlightColor: popup.highlightColor || 'green' }} />
+        ) : (
+          <div
+            style={{
+              fontFamily: popup.fontFamily || '"Hind Siliguri", "Noto Sans Bengali", sans-serif',
+              fontSize: 48,
+              fontWeight: 900,
+              color: popup.textColor || '#FFFFFF',
+              textAlign: 'center',
+              lineHeight: 1.1,
+              wordBreak: 'break-word',
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {popup.headline}
+          </div>
+        )}
 
       </div>
     </div>
