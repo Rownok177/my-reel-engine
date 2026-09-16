@@ -1,8 +1,9 @@
 {
-  "videoUrl": "http://localhost:3000/media/video_tmp_files/input.mp4",
+  "videoUrl": "https://vjs.zencdn.net/v/oceans.mp4",
   "popups": [
     {
       "start_time": "00:00:00.500",
+      "end_time": "00:00:03.500",
       "headline": "BOUNCE ANIMATION",
       "subtext": "Top-Left Safe Zone",
       "badgeText": "FEATURE 1",
@@ -15,6 +16,7 @@
     },
     {
       "start_time": "00:00:04.000",
+      "end_time": "00:00:07.000",
       "headline": "SLIDE ANIMATION",
       "subtext": "Top-Right Safe Zone",
       "badgeText": "FEATURE 2",
@@ -27,6 +29,7 @@
     },
     {
       "start_time": "00:00:07.500",
+      "end_time": "00:00:10.500",
       "headline": "MASSIVE ZOOM POP",
       "subtext": "Lower-Third Focus Area",
       "badgeText": "HIGHLIGHT",
@@ -39,6 +42,7 @@
     },
     {
       "start_time": "00:00:11.000",
+      "end_time": "00:00:15.000",
       "headline": "SPRING ANIMATION",
       "subtext": "Bottom Safe Zone",
       "badgeText": "SAFE ZONE",

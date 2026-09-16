@@ -10,49 +10,33 @@
 var esm = __webpack_require__(3947);
 // EXTERNAL MODULE: ./node_modules/react/jsx-runtime.js
 var jsx_runtime = __webpack_require__(4848);
+// EXTERNAL MODULE: ./node_modules/react/index.js
+var react = __webpack_require__(6540);
 ;// ./src/Composition.tsx
 
 
 
+
 const parseTimeToSeconds = (time) => {
-  if (time === void 0 || time === null) {
-    return 0;
-  }
-  if (typeof time === "number") {
-    return time;
-  }
+  if (time === void 0 || time === null) return 0;
+  if (typeof time === "number") return time;
   const str = String(time).trim();
-  if (!str) {
-    return 0;
-  }
+  if (!str) return 0;
   if (str.includes(":")) {
     const parts = str.split(":").map(Number);
-    if (parts.length === 3) {
-      return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    }
-    if (parts.length === 2) {
-      return parts[0] * 60 + parts[1];
-    }
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
   }
   const parsed = parseFloat(str);
   return Number.isNaN(parsed) ? 0 : parsed;
 };
+const LETTERBOX_CONTENT_ASPECT = 16 / 9;
+const PORTRAIT_ASPECT = 9 / 16;
+const PORTRAIT_FILL_SCALE = Math.max(1, 1 / PORTRAIT_ASPECT / (1 / LETTERBOX_CONTENT_ASPECT));
+const VIDEO_FILL_SCALE = Math.max(3.18, PORTRAIT_FILL_SCALE);
 const POSITION_STYLES = {
-  /*
-   * TOP
-   */
-  top: {
-    position: "absolute",
-    top: "10%",
-    left: "50%",
-    width: "80%"
-  },
-  "top-left": {
-    position: "absolute",
-    top: "10%",
-    left: "5%",
-    width: "80%"
-  },
+  top: { position: "absolute", top: "10%", left: "50%", width: "80%" },
+  "top-left": { position: "absolute", top: "10%", left: "5%", width: "80%" },
   "top-right": {
     position: "absolute",
     top: "10%",
@@ -60,24 +44,8 @@ const POSITION_STYLES = {
     width: "80%",
     alignItems: "flex-end"
   },
-  /*
-   * CENTER SAFE ZONE
-   *
-   * This is NOT the exact center.
-   * It is deliberately moved downward.
-   */
-  center: {
-    position: "absolute",
-    top: "62%",
-    left: "50%",
-    width: "80%"
-  },
-  "center-left": {
-    position: "absolute",
-    top: "62%",
-    left: "5%",
-    width: "80%"
-  },
+  center: { position: "absolute", top: "62%", left: "50%", width: "80%" },
+  "center-left": { position: "absolute", top: "62%", left: "5%", width: "80%" },
   "center-right": {
     position: "absolute",
     top: "62%",
@@ -85,21 +53,8 @@ const POSITION_STYLES = {
     width: "80%",
     alignItems: "flex-end"
   },
-  /*
-   * BOTTOM
-   */
-  bottom: {
-    position: "absolute",
-    bottom: "8%",
-    left: "50%",
-    width: "80%"
-  },
-  "bottom-left": {
-    position: "absolute",
-    bottom: "8%",
-    left: "5%",
-    width: "80%"
-  },
+  bottom: { position: "absolute", bottom: "8%", left: "50%", width: "80%" },
+  "bottom-left": { position: "absolute", bottom: "8%", left: "5%", width: "80%" },
   "bottom-right": {
     position: "absolute",
     bottom: "8%",
@@ -108,40 +63,152 @@ const POSITION_STYLES = {
     alignItems: "flex-end"
   }
 };
+const HIGHLIGHT_COLORS = {
+  green: "#B7F000",
+  red: "#FF3B30",
+  blue: "#28A9FF",
+  yellow: "#FFD60A"
+};
+const FONT_CONFIG = {
+  "Hind Siliguri": {
+    family: "Hind Siliguri",
+    src: (0,esm.staticFile)("fonts/HindSiliguri-Bold.ttf"),
+    weight: "700 900"
+  },
+  "Noto Sans Bengali": {
+    family: "Noto Sans Bengali",
+    src: (0,esm.staticFile)("fonts/NotoSansBengali-VariableFont_wdth,wght.ttf"),
+    weight: "100 900"
+  },
+  "Anek Bangla": {
+    family: "Anek Bangla",
+    src: (0,esm.staticFile)("fonts/AnekBangla-VariableFont_wdth,wght.ttf"),
+    weight: "100 900"
+  }
+};
+function normalizeFontName(value) {
+  const name = String(value || "Hind Siliguri").trim();
+  if (name in FONT_CONFIG) return name;
+  return "Hind Siliguri";
+}
+function getHighlightColor(value) {
+  return HIGHLIGHT_COLORS[String(value || "green").toLowerCase()] || HIGHLIGHT_COLORS.green;
+}
+function FontLoader() {
+  const handleRef = (0,react.useRef)(null);
+  const [handle] = react.useState(() => (0,esm.delayRender)("Loading local caption fonts"));
+  (0,react.useEffect)(() => {
+    handleRef.current = handle;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const fontEntries = Object.values(FONT_CONFIG);
+        for (const font of fontEntries) {
+          const face = new FontFace(font.family, `url("${font.src}")`, {
+            weight: font.weight,
+            style: "normal",
+            display: "block"
+          });
+          const loaded = await face.load();
+          document.fonts.add(loaded);
+        }
+        await Promise.all(
+          fontEntries.map((font) => document.fonts.load(`800 56px "${font.family}"`))
+        );
+      } catch (error) {
+        console.error("[Fonts] Failed to load one or more local fonts:", error);
+      } finally {
+        if (!cancelled && handleRef.current !== null) {
+          (0,esm.continueRender)(handleRef.current);
+          handleRef.current = null;
+        }
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [handle]);
+  return null;
+}
+function splitBanglaReelText(headline, requestedHighlight) {
+  const text = String(headline || "").trim();
+  if (!text) return { before: "", highlight: "", after: "" };
+  const requested = String(requestedHighlight || "").trim();
+  if (requested) {
+    const index = text.toLocaleLowerCase().lastIndexOf(requested.toLocaleLowerCase());
+    if (index >= 0) {
+      return {
+        before: text.slice(0, index),
+        highlight: text.slice(index, index + requested.length),
+        after: text.slice(index + requested.length)
+      };
+    }
+  }
+  return { before: text, highlight: "", after: "" };
+}
+function BanglaReelHeadline({ popup }) {
+  const { before, highlight, after } = splitBanglaReelText(
+    popup.headline,
+    popup.highlightText
+  );
+  const accent = getHighlightColor(popup.highlightColor);
+  const fontName = normalizeFontName(popup.fontFamily);
+  return /* @__PURE__ */ (0,jsx_runtime.jsxs)(
+    "div",
+    {
+      style: {
+        fontFamily: `"${fontName}", sans-serif`,
+        fontSize: 54,
+        fontWeight: 800,
+        lineHeight: 1.02,
+        textAlign: "center",
+        wordBreak: "break-word",
+        overflowWrap: "anywhere",
+        textShadow: "-2px -2px 0 rgba(0,0,0,0.95), 2px -2px 0 rgba(0,0,0,0.95), -2px 2px 0 rgba(0,0,0,0.95), 2px 2px 0 rgba(0,0,0,0.95), 0 4px 12px rgba(0,0,0,0.85)",
+        maxWidth: "100%",
+        margin: "0 auto",
+        overflow: "hidden",
+        boxSizing: "border-box"
+      },
+      children: [
+        /* @__PURE__ */ (0,jsx_runtime.jsx)("span", { style: { color: "#FFFFFF" }, children: before }),
+        highlight ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
+          "span",
+          {
+            style: {
+              color: accent,
+              fontWeight: 900,
+              fontSize: "1.28em",
+              display: "inline-block",
+              marginInline: "0.08em",
+              textShadow: "-2px -2px 0 rgba(0,0,0,0.98), 2px -2px 0 rgba(0,0,0,0.98), -2px 2px 0 rgba(0,0,0,0.98), 2px 2px 0 rgba(0,0,0,0.98), 0 5px 16px rgba(0,0,0,0.8)"
+            },
+            children: highlight
+          }
+        ) : null,
+        after ? /* @__PURE__ */ (0,jsx_runtime.jsxs)("span", { style: { color: "#FFFFFF" }, children: [
+          " ",
+          after
+        ] }) : null
+      ]
+    }
+  );
+}
 const Popup = ({
   popup,
   durationInFrames
 }) => {
   const frame = (0,esm.useCurrentFrame)();
   const { fps } = (0,esm.useVideoConfig)();
-  const safeDuration = Math.max(
-    1,
-    durationInFrames
-  );
-  const fadeFrames = Math.max(
-    1,
-    Math.min(
-      6,
-      Math.floor(safeDuration / 4)
-    )
-  );
-  const fadeOutStart = Math.max(
-    fadeFrames,
-    safeDuration - fadeFrames
-  );
+  const safeDuration = Math.max(1, durationInFrames);
+  const fadeFrames = Math.max(1, Math.min(6, Math.floor(safeDuration / 4)));
+  const fadeOutStart = Math.max(fadeFrames, safeDuration - fadeFrames);
   const opacity = (0,esm.interpolate)(
     frame,
-    [
-      0,
-      fadeFrames,
-      fadeOutStart,
-      safeDuration
-    ],
+    [0, fadeFrames, fadeOutStart, safeDuration],
     [0, 1, 1, 0],
-    {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp"
-    }
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
   );
   let animationTransform = "";
   const animType = popup.animationType || "bounce";
@@ -149,68 +216,51 @@ const Popup = ({
     const scaleSpring = (0,esm.spring)({
       frame,
       fps,
-      config: {
-        damping: 11,
-        stiffness: 120
-      }
+      config: { damping: 11, stiffness: 120 }
     });
     animationTransform = `scale(${scaleSpring})`;
   } else if (animType === "zoom-out") {
-    const scaleZoom = (0,esm.interpolate)(
-      frame,
-      [0, fadeFrames],
-      [1.4, 1],
-      {
-        extrapolateLeft: "clamp",
-        extrapolateRight: "clamp"
-      }
-    );
+    const scaleZoom = (0,esm.interpolate)(frame, [0, fadeFrames], [1.4, 1], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp"
+    });
     animationTransform = `scale(${scaleZoom})`;
   } else if (animType === "slide") {
-    const translateY = (0,esm.interpolate)(
-      frame,
-      [0, fadeFrames],
-      [-40, 0],
-      {
-        extrapolateLeft: "clamp",
-        extrapolateRight: "clamp"
-      }
-    );
+    const translateY = (0,esm.interpolate)(frame, [0, fadeFrames], [-40, 0], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp"
+    });
     animationTransform = `translateY(${translateY}px)`;
   } else {
-    const scaleDefault = (0,esm.interpolate)(
-      frame,
-      [0, fadeFrames],
-      [0.85, 1],
-      {
-        extrapolateLeft: "clamp",
-        extrapolateRight: "clamp"
-      }
-    );
+    const scaleDefault = (0,esm.interpolate)(frame, [0, fadeFrames], [0.85, 1], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp"
+    });
     animationTransform = `scale(${scaleDefault})`;
   }
-  const positionStyle = POSITION_STYLES[popup.position || "center"] || POSITION_STYLES.center;
+  const positionKey = popup.position || "center";
+  const positionStyle = POSITION_STYLES[positionKey] || POSITION_STYLES.center;
   let positionalTransform = "";
-  if (popup.position === "top" || popup.position === "center" || popup.position === "bottom") {
+  if (positionKey === "top" || positionKey === "center" || positionKey === "bottom") {
     positionalTransform = "translateX(-50%)";
   }
+  const isBanglaReel = popup.theme === "bangla_reel";
+  const fontName = normalizeFontName(popup.fontFamily);
   const containerStyle = {
-    backgroundColor: popup.bgColor || "rgba(15, 23, 42, 0.92)",
-    border: `2px solid ${popup.borderColor || "#4ADE80"}`,
-    borderRadius: 20,
-    padding: "18px 30px",
-    boxShadow: "0 20px 30px rgba(0,0,0,0.5)",
-    backdropFilter: "blur(10px)",
+    backgroundColor: isBanglaReel ? "transparent" : popup.bgColor || "rgba(15, 23, 42, 0.92)",
+    border: isBanglaReel ? "none" : `2px solid ${popup.borderColor || "#4ADE80"}`,
+    borderRadius: isBanglaReel ? 0 : 20,
+    padding: isBanglaReel ? "4px 8px" : "18px 30px",
+    boxShadow: isBanglaReel ? "none" : "0 20px 30px rgba(0,0,0,0.5)",
+    backdropFilter: isBanglaReel ? "none" : "blur(10px)",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    maxWidth: "80%",
+    maxWidth: isBanglaReel ? "88%" : "80%",
     boxSizing: "border-box",
     transform: `${positionalTransform} ${animationTransform}`.trim()
   };
-  const positionWithoutTransform = {
-    ...positionStyle
-  };
+  const positionWithoutTransform = { ...positionStyle };
   delete positionWithoutTransform.transform;
   return /* @__PURE__ */ (0,jsx_runtime.jsx)(
     "div",
@@ -220,154 +270,93 @@ const Popup = ({
         pointerEvents: "none",
         boxSizing: "border-box"
       },
-      children: /* @__PURE__ */ (0,jsx_runtime.jsxs)(
-        "div",
-        {
-          style: {
-            opacity,
-            ...containerStyle
-          },
-          children: [
-            popup.badgeText ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
-              "div",
-              {
-                style: {
-                  fontSize: 14,
-                  fontWeight: 800,
-                  letterSpacing: "0.1em",
-                  color: popup.borderColor || "#4ADE80",
-                  textTransform: "uppercase",
-                  marginBottom: 6
-                },
-                children: popup.badgeText
-              }
-            ) : null,
-            /* @__PURE__ */ (0,jsx_runtime.jsx)(
-              "div",
-              {
-                style: {
-                  fontSize: 48,
-                  fontWeight: 900,
-                  color: popup.textColor || "#FFFFFF",
-                  textAlign: "center",
-                  lineHeight: 1.1,
-                  textTransform: "uppercase",
-                  wordBreak: "break-word"
-                },
-                children: popup.headline
-              }
-            ),
-            popup.subtext ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
-              "div",
-              {
-                style: {
-                  fontSize: 26,
-                  fontWeight: 700,
-                  color: popup.subtextColor || "#4ADE80",
-                  textAlign: "center",
-                  marginTop: 6,
-                  lineHeight: 1.15,
-                  wordBreak: "break-word"
-                },
-                children: popup.subtext
-              }
-            ) : null
-          ]
-        }
-      )
+      children: /* @__PURE__ */ (0,jsx_runtime.jsxs)("div", { style: { opacity, ...containerStyle }, children: [
+        popup.badgeText ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
+          "div",
+          {
+            style: {
+              fontFamily: `"${fontName}", sans-serif`,
+              fontSize: 14,
+              fontWeight: 800,
+              letterSpacing: "0.1em",
+              color: popup.borderColor || "#4ADE80",
+              marginBottom: 6
+            },
+            children: popup.badgeText
+          }
+        ) : null,
+        isBanglaReel ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
+          BanglaReelHeadline,
+          {
+            popup: {
+              ...popup,
+              highlightColor: popup.highlightColor || "green"
+            }
+          }
+        ) : /* @__PURE__ */ (0,jsx_runtime.jsx)(
+          "div",
+          {
+            style: {
+              fontFamily: `"${fontName}", sans-serif`,
+              fontSize: 48,
+              fontWeight: 900,
+              color: popup.textColor || "#FFFFFF",
+              textAlign: "center",
+              lineHeight: 1.1,
+              wordBreak: "break-word",
+              overflowWrap: "anywhere"
+            },
+            children: popup.headline
+          }
+        )
+      ] })
     }
   );
 };
-const MainReel = ({
-  videoUrl,
-  popups
-}) => {
+const MainReel = ({ videoUrl, popups }) => {
   const { fps } = (0,esm.useVideoConfig)();
   const safePopups = Array.isArray(popups) ? popups : [];
   let cleanUrl = String(videoUrl || "").trim();
-  if (!cleanUrl || cleanUrl === "undefined" || cleanUrl === "null" || cleanUrl.includes(
-    "remotion-assets.s3"
-  ) || cleanUrl.includes(
-    "commondatastorage.googleapis.com"
-  )) {
+  if (!cleanUrl || cleanUrl === "undefined" || cleanUrl === "null" || cleanUrl.includes("remotion-assets.s3") || cleanUrl.includes("commondatastorage.googleapis.com")) {
     cleanUrl = "https://vjs.zencdn.net/v/oceans.mp4";
   }
-  return /* @__PURE__ */ (0,jsx_runtime.jsxs)(
-    esm.AbsoluteFill,
-    {
-      style: {
-        backgroundColor: "black",
-        overflow: "hidden"
-      },
-      children: [
-        cleanUrl ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
-          esm.OffthreadVideo,
-          {
-            src: cleanUrl,
-            onError: (err) => console.warn(
-              "Video stream load warning:",
-              err
-            ),
-            style: {
-              position: "absolute",
-              width: "100%",
-              height: "100%",
-              /*
-               * Fill the complete 1080 x 1920
-               * portrait composition.
-               */
-              objectFit: "cover",
-              /*
-               * Crop from the center of the
-               * source video.
-               */
-              objectPosition: "50% 50%",
-              display: "block"
-            }
-          }
-        ) : null,
-        safePopups.map(
-          (popup, i) => {
-            const startSec = parseTimeToSeconds(
-              popup.start_time
-            );
-            const rawEndSec = parseTimeToSeconds(
-              popup.end_time
-            );
-            const endSec = rawEndSec > startSec ? rawEndSec : startSec + 3;
-            const startFrame = popup.start_frame ?? Math.max(
-              0,
-              Math.round(
-                startSec * fps
-              )
-            );
-            const endFrame = popup.end_frame ?? Math.round(
-              endSec * fps
-            );
-            const durationInFrames = popup.duration_in_frames ?? Math.max(
-              1,
-              endFrame - startFrame
-            );
-            return /* @__PURE__ */ (0,jsx_runtime.jsx)(
-              esm.Sequence,
-              {
-                from: startFrame,
-                durationInFrames,
-                children: /* @__PURE__ */ (0,jsx_runtime.jsx)(
-                  Popup,
-                  {
-                    popup,
-                    durationInFrames
-                  }
-                )
-              },
-              `${popup.headline}-${startFrame}-${i}`
-            );
-          }
-        )
-      ]
-    }
-  );
+  return /* @__PURE__ */ (0,jsx_runtime.jsxs)(esm.AbsoluteFill, { style: { backgroundColor: "black", overflow: "hidden" }, children: [
+    /* @__PURE__ */ (0,jsx_runtime.jsx)(FontLoader, {}),
+    cleanUrl ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
+      esm.OffthreadVideo,
+      {
+        src: cleanUrl,
+        onError: (err) => console.warn("Video stream load warning:", err),
+        style: {
+          position: "absolute",
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: "50% 50%",
+          transform: `scale(${VIDEO_FILL_SCALE})`,
+          transformOrigin: "50% 50%",
+          display: "block"
+        }
+      }
+    ) : null,
+    safePopups.map((popup, i) => {
+      const startSec = parseTimeToSeconds(popup.start_time);
+      const rawEndSec = parseTimeToSeconds(popup.end_time);
+      const endSec = rawEndSec > startSec ? rawEndSec : startSec + 3;
+      const startFrame = popup.start_frame ?? Math.max(0, Math.round(startSec * fps));
+      const endFrame = popup.end_frame ?? Math.round(endSec * fps);
+      const durationInFrames = popup.duration_in_frames ?? Math.max(1, endFrame - startFrame);
+      return /* @__PURE__ */ (0,jsx_runtime.jsx)(
+        esm.Sequence,
+        {
+          from: startFrame,
+          durationInFrames,
+          children: /* @__PURE__ */ (0,jsx_runtime.jsx)(Popup, { popup, durationInFrames })
+        },
+        `${popup.headline}-${startFrame}-${i}`
+      );
+    })
+  ] });
 };
 const MainComposition = MainReel;
 /* harmony default export */ const Composition = ((/* unused pure expression or super */ null && (MainReel)));
@@ -440,14 +429,12 @@ const RemotionRoot = () => {
         popups: [
           {
             headline: "Meeting a Professional",
-            subtext: "Working since 1992 (\u09E7\u09EF\u09EF\u09E8 \u09B8\u09BE\u09B2 \u09A5\u09C7\u0995\u09C7 \u099C\u09AC \u0995\u09B0\u099B\u09C7\u09A8)",
             position: "center",
             start_time: 0.5,
             end_time: 3
           },
           {
             headline: "1992: The First Step",
-            subtext: "Handwritten CV (\u09B9\u09BE\u09A4\u09C7 \u09B2\u09C7\u0996\u09BE \u09B8\u09BF\u09AD\u09BF)",
             position: "center",
             start_time: 7.5,
             end_time: 12

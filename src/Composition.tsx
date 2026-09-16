@@ -1,4 +1,4 @@
-import React from "react";
+import React, {useEffect, useRef} from "react";
 import {
   AbsoluteFill,
   Sequence,
@@ -7,11 +7,13 @@ import {
   useVideoConfig,
   interpolate,
   spring,
+  staticFile,
+  delayRender,
+  continueRender ,
 } from "remotion";
 
-export type PopupTheme = 'bold_clean' | 'bangla_reel';
-
-export type HighlightColor = 'green' | 'red' | 'blue' | 'yellow';
+export type PopupTheme = "bold_clean" | "bangla_reel";
+export type HighlightColor = "green" | "red" | "blue" | "yellow";
 
 export interface PopupData {
   headline: string;
@@ -20,7 +22,6 @@ export interface PopupData {
   highlightColor?: HighlightColor | string;
   highlightText?: string;
   fontFamily?: string;
-
   position?:
     | "top"
     | "top-left"
@@ -32,18 +33,10 @@ export interface PopupData {
     | "bottom-left"
     | "bottom-right"
     | string;
-
-  animationType?:
-    | "bounce"
-    | "slide"
-    | "zoom-out"
-    | "spring"
-    | string;
-
+  animationType?: "bounce" | "slide" | "zoom-out" | "spring" | string;
   textColor?: string;
   bgColor?: string;
   borderColor?: string;
-
   start_time: number | string;
   end_time?: number | string;
   start_frame?: number;
@@ -51,8 +44,7 @@ export interface PopupData {
   duration_in_frames?: number;
 }
 
-export interface MainReelProps
-  extends Record<string, unknown> {
+export interface MainReelProps extends Record<string, unknown> {
   videoUrl: string;
   popups: PopupData[];
 }
@@ -60,82 +52,39 @@ export interface MainReelProps
 export type MainCompositionProps = MainReelProps;
 
 const parseTimeToSeconds = (
-  time: string | number | undefined
+  time: string | number | undefined,
 ): number => {
-  if (time === undefined || time === null) {
-    return 0;
-  }
-
-  if (typeof time === "number") {
-    return time;
-  }
+  if (time === undefined || time === null) return 0;
+  if (typeof time === "number") return time;
 
   const str = String(time).trim();
-
-  if (!str) {
-    return 0;
-  }
+  if (!str) return 0;
 
   if (str.includes(":")) {
     const parts = str.split(":").map(Number);
-
-    if (parts.length === 3) {
-      return (
-        parts[0] * 3600 +
-        parts[1] * 60 +
-        parts[2]
-      );
-    }
-
-    if (parts.length === 2) {
-      return parts[0] * 60 + parts[1];
-    }
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
   }
 
   const parsed = parseFloat(str);
-
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
-/*
- * Explicit mobile popup zones.
- *
- * These positions are based on the 1080 x 1920
- * portrait composition.
- *
- * top:
- *      approximately 10% from top
- *
- * center:
- *      approximately 62% from top
- *      This is intentionally LOWER than the
- *      mathematical center so it is less likely
- *      to cover a person's face.
- *
- * bottom:
- *      approximately 8% from bottom
- */
-const POSITION_STYLES: Record<
-  string,
-  React.CSSProperties
-> = {
-  /*
-   * TOP
-   */
-  top: {
-    position: "absolute",
-    top: "10%",
-    left: "50%",
-    width: "80%",
-  },
+// The uploaded source videos used by this pipeline are portrait containers (1080x1920)
+// that contain a centered 16:9 video inside large black letterbox areas.
+// A normal objectFit: "cover" cannot remove those baked-in bars because the bars
+// are already part of the source pixels. We therefore zoom the source layer so the
+// embedded 16:9 picture fills the 1080x1920 portrait composition.
+const LETTERBOX_CONTENT_ASPECT = 16 / 9;
+const PORTRAIT_ASPECT = 9 / 16;
+const PORTRAIT_FILL_SCALE = Math.max(1, (1 / PORTRAIT_ASPECT) / (1 / LETTERBOX_CONTENT_ASPECT));
+// Equivalent to ~3.16x for a 16:9 image embedded in a 9:16 source canvas.
+// Slightly round upward to guarantee the black bars are fully cropped.
+const VIDEO_FILL_SCALE = Math.max(3.18, PORTRAIT_FILL_SCALE);
 
-  "top-left": {
-    position: "absolute",
-    top: "10%",
-    left: "5%",
-    width: "80%",
-  },
-
+const POSITION_STYLES: Record<string, React.CSSProperties> = {
+  top: {position: "absolute", top: "10%", left: "50%", width: "80%"},
+  "top-left": {position: "absolute", top: "10%", left: "5%", width: "80%"},
   "top-right": {
     position: "absolute",
     top: "10%",
@@ -143,27 +92,8 @@ const POSITION_STYLES: Record<
     width: "80%",
     alignItems: "flex-end",
   },
-
-  /*
-   * CENTER SAFE ZONE
-   *
-   * This is NOT the exact center.
-   * It is deliberately moved downward.
-   */
-  center: {
-    position: "absolute",
-    top: "62%",
-    left: "50%",
-    width: "80%",
-  },
-
-  "center-left": {
-    position: "absolute",
-    top: "62%",
-    left: "5%",
-    width: "80%",
-  },
-
+  center: {position: "absolute", top: "62%", left: "50%", width: "80%"},
+  "center-left": {position: "absolute", top: "62%", left: "5%", width: "80%"},
   "center-right": {
     position: "absolute",
     top: "62%",
@@ -171,24 +101,8 @@ const POSITION_STYLES: Record<
     width: "80%",
     alignItems: "flex-end",
   },
-
-  /*
-   * BOTTOM
-   */
-  bottom: {
-    position: "absolute",
-    bottom: "8%",
-    left: "50%",
-    width: "80%",
-  },
-
-  "bottom-left": {
-    position: "absolute",
-    bottom: "8%",
-    left: "5%",
-    width: "80%",
-  },
-
+  bottom: {position: "absolute", bottom: "8%", left: "50%", width: "80%"},
+  "bottom-left": {position: "absolute", bottom: "8%", left: "5%", width: "80%"},
   "bottom-right": {
     position: "absolute",
     bottom: "8%",
@@ -199,239 +113,240 @@ const POSITION_STYLES: Record<
 };
 
 const HIGHLIGHT_COLORS: Record<string, string> = {
-  green: '#B7F000',
-  red: '#FF3B30',
-  blue: '#28A9FF',
-  yellow: '#FFD60A',
+  green: "#B7F000",
+  red: "#FF3B30",
+  blue: "#28A9FF",
+  yellow: "#FFD60A",
 };
 
-function getHighlightColor(value?: string) {
-  return HIGHLIGHT_COLORS[String(value || 'green').toLowerCase()] || HIGHLIGHT_COLORS.green;
+const FONT_CONFIG = {
+  "Hind Siliguri": {
+    family: "Hind Siliguri",
+    src: staticFile("fonts/HindSiliguri-Bold.ttf"),
+    weight: "700 900",
+  },
+  "Noto Sans Bengali": {
+    family: "Noto Sans Bengali",
+    src: staticFile("fonts/NotoSansBengali-VariableFont_wdth,wght.ttf"),
+    weight: "100 900",
+  },
+  "Anek Bangla": {
+    family: "Anek Bangla",
+    src: staticFile("fonts/AnekBangla-VariableFont_wdth,wght.ttf"),
+    weight: "100 900",
+  },
+} as const;
+
+type SupportedFont = keyof typeof FONT_CONFIG;
+
+function normalizeFontName(value?: string): SupportedFont {
+  const name = String(value || "Hind Siliguri").trim();
+  if (name in FONT_CONFIG) return name as SupportedFont;
+  return "Hind Siliguri";
 }
 
-function splitBanglaReelText(headline: string, requestedHighlight?: string) {
-  const text = String(headline || '').trim();
-  if (!text) return { before: '', highlight: '', after: '' };
+function getHighlightColor(value?: string): string {
+  return (
+    HIGHLIGHT_COLORS[String(value || "green").toLowerCase()] ||
+    HIGHLIGHT_COLORS.green
+  );
+}
 
-  const requested = String(requestedHighlight || '').trim();
+function FontLoader() {
+  const handleRef = useRef<number | null>(null);
+  const [handle] = React.useState(() => delayRender("Loading local caption fonts"));
+
+  useEffect(() => {
+    handleRef.current = handle;
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const fontEntries = Object.values(FONT_CONFIG);
+
+        for (const font of fontEntries) {
+          const face = new FontFace(font.family, `url("${font.src}")`, {
+            weight: font.weight,
+            style: "normal",
+            display: "block",
+          });
+          const loaded = await face.load();
+          document.fonts.add(loaded);
+        }
+
+        await Promise.all(
+          fontEntries.map((font) => document.fonts.load(`800 56px "${font.family}"`)),
+        );
+      } catch (error) {
+        console.error("[Fonts] Failed to load one or more local fonts:", error);
+      } finally {
+        if (!cancelled && handleRef.current !== null) {
+          continueRender(handleRef.current);
+          handleRef.current = null;
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [handle]);
+
+  return null;
+}
+
+function splitBanglaReelText(
+  headline: string,
+  requestedHighlight?: string,
+): {before: string; highlight: string; after: string} {
+  const text = String(headline || "").trim();
+  if (!text) return {before: "", highlight: "", after: ""};
+
+  const requested = String(requestedHighlight || "").trim();
   if (requested) {
-    const index = text.lastIndexOf(requested);
+    const index = text.toLocaleLowerCase().lastIndexOf(requested.toLocaleLowerCase());
     if (index >= 0) {
       return {
         before: text.slice(0, index),
-        highlight: requested,
+        highlight: text.slice(index, index + requested.length),
         after: text.slice(index + requested.length),
       };
     }
   }
 
-  const parts = text.split(/\s+/);
-  if (parts.length <= 2) {
-    return { before: '', highlight: text, after: '' };
-  }
-
-  const highlightCount = parts.length >= 8 ? 2 : 1;
-  const highlight = parts.slice(-highlightCount).join(' ');
-  const before = parts.slice(0, -highlightCount).join(' ');
-  return { before, highlight, after: '' };
+  // No automatic last-word highlighting. Only highlight when highlightText
+  // explicitly identifies a phrase that exists in the spoken line.
+  return {before: text, highlight: "", after: ""};
 }
 
-function BanglaReelHeadline({ popup }: { popup: PopupData }) {
-  const { before, highlight, after } = splitBanglaReelText(popup.headline, popup.highlightText);
+function BanglaReelHeadline({popup}: {popup: PopupData}) {
+  const {before, highlight, after} = splitBanglaReelText(
+    popup.headline,
+    popup.highlightText,
+  );
   const accent = getHighlightColor(popup.highlightColor);
+  const fontName = normalizeFontName(popup.fontFamily);
 
   return (
     <div
       style={{
-        fontFamily: popup.fontFamily || '"Hind Siliguri", "Noto Sans Bengali", sans-serif',
-        fontSize: 56,
+        fontFamily: `"${fontName}", sans-serif`,
+        fontSize: 54,
         fontWeight: 800,
         lineHeight: 1.02,
-        textAlign: 'center',
-        wordBreak: 'break-word',
-        textShadow: '0 4px 12px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9)',
-        maxWidth: '92%',
-        margin: '0 auto',
+        textAlign: "center",
+        wordBreak: "break-word",
+        overflowWrap: "anywhere",
+        textShadow:
+          "-2px -2px 0 rgba(0,0,0,0.95), 2px -2px 0 rgba(0,0,0,0.95), -2px 2px 0 rgba(0,0,0,0.95), 2px 2px 0 rgba(0,0,0,0.95), 0 4px 12px rgba(0,0,0,0.85)",
+        maxWidth: "100%",
+        margin: "0 auto",
+        overflow: "hidden",
+        boxSizing: "border-box",
       }}
     >
-      {before ? <span style={{ color: '#FFFFFF' }}>{before} </span> : null}
+      <span style={{color: "#FFFFFF"}}>{before}</span>
       {highlight ? (
         <span
           style={{
             color: accent,
             fontWeight: 900,
-            fontSize: '1.28em',
-            display: 'inline-block',
-            textShadow: '0 5px 16px rgba(0,0,0,0.8)',
+            fontSize: "1.28em",
+            display: "inline-block",
+            marginInline: "0.08em",
+            textShadow:
+              "-2px -2px 0 rgba(0,0,0,0.98), 2px -2px 0 rgba(0,0,0,0.98), -2px 2px 0 rgba(0,0,0,0.98), 2px 2px 0 rgba(0,0,0,0.98), 0 5px 16px rgba(0,0,0,0.8)",
           }}
         >
           {highlight}
         </span>
       ) : null}
-      {after ? <span style={{ color: '#FFFFFF' }}> {after}</span> : null}
+      {after ? <span style={{color: "#FFFFFF"}}> {after}</span> : null}
     </div>
   );
 }
 
-const Popup: React.FC<{
-  popup: PopupData;
-  durationInFrames: number;
-}> = ({
+const Popup: React.FC<{popup: PopupData; durationInFrames: number}> = ({
   popup,
   durationInFrames,
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const {fps} = useVideoConfig();
 
-  const safeDuration = Math.max(
-    1,
-    durationInFrames
-  );
-
-  const fadeFrames = Math.max(
-    1,
-    Math.min(
-      6,
-      Math.floor(safeDuration / 4)
-    )
-  );
-
-  const fadeOutStart = Math.max(
-    fadeFrames,
-    safeDuration - fadeFrames
-  );
+  const safeDuration = Math.max(1, durationInFrames);
+  const fadeFrames = Math.max(1, Math.min(6, Math.floor(safeDuration / 4)));
+  const fadeOutStart = Math.max(fadeFrames, safeDuration - fadeFrames);
 
   const opacity = interpolate(
     frame,
-    [
-      0,
-      fadeFrames,
-      fadeOutStart,
-      safeDuration,
-    ],
+    [0, fadeFrames, fadeOutStart, safeDuration],
     [0, 1, 1, 0],
-    {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    }
+    {extrapolateLeft: "clamp", extrapolateRight: "clamp"},
   );
 
   let animationTransform = "";
+  const animType = popup.animationType || "bounce";
 
-  const animType =
-    popup.animationType || "bounce";
-
-  if (
-    animType === "bounce" ||
-    animType === "spring"
-  ) {
+  if (animType === "bounce" || animType === "spring") {
     const scaleSpring = spring({
       frame,
       fps,
-      config: {
-        damping: 11,
-        stiffness: 120,
-      },
+      config: {damping: 11, stiffness: 120},
     });
-
-    animationTransform =
-      `scale(${scaleSpring})`;
-  } else if (
-    animType === "zoom-out"
-  ) {
-    const scaleZoom = interpolate(
-      frame,
-      [0, fadeFrames],
-      [1.4, 1],
-      {
-        extrapolateLeft: "clamp",
-        extrapolateRight: "clamp",
-      }
-    );
-
-    animationTransform =
-      `scale(${scaleZoom})`;
-  } else if (
-    animType === "slide"
-  ) {
-    const translateY = interpolate(
-      frame,
-      [0, fadeFrames],
-      [-40, 0],
-      {
-        extrapolateLeft: "clamp",
-        extrapolateRight: "clamp",
-      }
-    );
-
-    animationTransform =
-      `translateY(${translateY}px)`;
+    animationTransform = `scale(${scaleSpring})`;
+  } else if (animType === "zoom-out") {
+    const scaleZoom = interpolate(frame, [0, fadeFrames], [1.4, 1], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    });
+    animationTransform = `scale(${scaleZoom})`;
+  } else if (animType === "slide") {
+    const translateY = interpolate(frame, [0, fadeFrames], [-40, 0], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    });
+    animationTransform = `translateY(${translateY}px)`;
   } else {
-    const scaleDefault = interpolate(
-      frame,
-      [0, fadeFrames],
-      [0.85, 1],
-      {
-        extrapolateLeft: "clamp",
-        extrapolateRight: "clamp",
-      }
-    );
-
-    animationTransform =
-      `scale(${scaleDefault})`;
+    const scaleDefault = interpolate(frame, [0, fadeFrames], [0.85, 1], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    });
+    animationTransform = `scale(${scaleDefault})`;
   }
 
-  const positionStyle =
-    POSITION_STYLES[
-      popup.position || "center"
-    ] ||
-    POSITION_STYLES.center;
+  const positionKey = popup.position || "center";
+  const positionStyle = POSITION_STYLES[positionKey] || POSITION_STYLES.center;
 
-  /*
-   * Positioning transform is kept separate
-   * from the animation transform.
-   *
-   * This prevents the animation from replacing
-   * the horizontal centering.
-   */
   let positionalTransform = "";
-
-  if (
-    popup.position === "top" ||
-    popup.position === "center" ||
-    popup.position === "bottom"
-  ) {
-    positionalTransform =
-      "translateX(-50%)";
+  if (positionKey === "top" || positionKey === "center" || positionKey === "bottom") {
+    positionalTransform = "translateX(-50%)";
   }
 
-  const isBanglaReel = popup.theme === 'bangla_reel';
+  const isBanglaReel = popup.theme === "bangla_reel";
+  const fontName = normalizeFontName(popup.fontFamily);
 
   const containerStyle: React.CSSProperties = {
-    backgroundColor: isBanglaReel ? 'transparent' : (popup.bgColor || 'rgba(15, 23, 42, 0.92)'),
-    border: isBanglaReel ? 'none' : `2px solid ${popup.borderColor || '#4ADE80'}`,
+    backgroundColor: isBanglaReel
+      ? "transparent"
+      : popup.bgColor || "rgba(15, 23, 42, 0.92)",
+    border: isBanglaReel
+      ? "none"
+      : `2px solid ${popup.borderColor || "#4ADE80"}`,
     borderRadius: isBanglaReel ? 0 : 20,
-    padding: isBanglaReel ? '10px 18px' : '18px 30px',
-    boxShadow: isBanglaReel ? 'none' : '0 20px 30px rgba(0,0,0,0.5)',
-    backdropFilter: isBanglaReel ? 'none' : 'blur(10px)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    maxWidth: isBanglaReel ? '92%' : '80%',
-    boxSizing: 'border-box',
+    padding: isBanglaReel ? "4px 8px" : "18px 30px",
+    boxShadow: isBanglaReel ? "none" : "0 20px 30px rgba(0,0,0,0.5)",
+    backdropFilter: isBanglaReel ? "none" : "blur(10px)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    maxWidth: isBanglaReel ? "88%" : "80%",
+    boxSizing: "border-box",
     transform: `${positionalTransform} ${animationTransform}`.trim(),
   };
 
-  /*
-   * Remove only the transform property from
-   * POSITION_STYLES without creating an unused
-   * variable.
-   */
-  const positionWithoutTransform: React.CSSProperties =
-    {
-      ...positionStyle,
-    };
-
+  const positionWithoutTransform: React.CSSProperties = {...positionStyle};
   delete positionWithoutTransform.transform;
 
   return (
@@ -442,22 +357,16 @@ const Popup: React.FC<{
         boxSizing: "border-box",
       }}
     >
-      <div
-        style={{
-          opacity,
-          ...containerStyle,
-        }}
-      >
+      <div style={{opacity, ...containerStyle}}>
         {popup.badgeText ? (
           <div
             style={{
+              fontFamily: `"${fontName}", sans-serif`,
               fontSize: 14,
               fontWeight: 800,
               letterSpacing: "0.1em",
-              color:
-                popup.borderColor ||
-                "#4ADE80",
-                marginBottom: 6,
+              color: popup.borderColor || "#4ADE80",
+              marginBottom: 6,
             }}
           >
             {popup.badgeText}
@@ -465,160 +374,93 @@ const Popup: React.FC<{
         ) : null}
 
         {isBanglaReel ? (
-          <BanglaReelHeadline popup={{ ...popup, highlightColor: popup.highlightColor || 'green' }} />
+          <BanglaReelHeadline
+            popup={{
+              ...popup,
+              highlightColor: popup.highlightColor || "green",
+            }}
+          />
         ) : (
           <div
             style={{
-              fontFamily: popup.fontFamily || '"Hind Siliguri", "Noto Sans Bengali", sans-serif',
+              fontFamily: `"${fontName}", sans-serif`,
               fontSize: 48,
               fontWeight: 900,
-              color: popup.textColor || '#FFFFFF',
-              textAlign: 'center',
+              color: popup.textColor || "#FFFFFF",
+              textAlign: "center",
               lineHeight: 1.1,
-              wordBreak: 'break-word',
-              overflowWrap: 'anywhere',
+              wordBreak: "break-word",
+              overflowWrap: "anywhere",
             }}
           >
             {popup.headline}
           </div>
         )}
-
       </div>
     </div>
   );
 };
 
-export const MainReel: React.FC<
-  MainReelProps
-> = ({
-  videoUrl,
-  popups,
-}) => {
-  const { fps } = useVideoConfig();
+export const MainReel: React.FC<MainReelProps> = ({videoUrl, popups}) => {
+  const {fps} = useVideoConfig();
+  const safePopups = Array.isArray(popups) ? popups : [];
 
-  const safePopups =
-    Array.isArray(popups)
-      ? popups
-      : [];
-
-  let cleanUrl =
-    String(videoUrl || "").trim();
-
+  let cleanUrl = String(videoUrl || "").trim();
   if (
     !cleanUrl ||
     cleanUrl === "undefined" ||
     cleanUrl === "null" ||
-    cleanUrl.includes(
-      "remotion-assets.s3"
-    ) ||
-    cleanUrl.includes(
-      "commondatastorage.googleapis.com"
-    )
+    cleanUrl.includes("remotion-assets.s3") ||
+    cleanUrl.includes("commondatastorage.googleapis.com")
   ) {
-    cleanUrl =
-      "https://vjs.zencdn.net/v/oceans.mp4";
+    cleanUrl = "https://vjs.zencdn.net/v/oceans.mp4";
   }
 
   return (
-    <AbsoluteFill
-      style={{
-        backgroundColor: "black",
-        overflow: "hidden",
-      }}
-    >
+    <AbsoluteFill style={{backgroundColor: "black", overflow: "hidden"}}>
+      <FontLoader />
+
       {cleanUrl ? (
         <OffthreadVideo
           src={cleanUrl}
-          onError={(err) =>
-            console.warn(
-              "Video stream load warning:",
-              err
-            )
-          }
+          onError={(err) => console.warn("Video stream load warning:", err)}
           style={{
             position: "absolute",
             width: "100%",
             height: "100%",
-
-            /*
-             * Fill the complete 1080 x 1920
-             * portrait composition.
-             */
             objectFit: "cover",
-
-            /*
-             * Crop from the center of the
-             * source video.
-             */
             objectPosition: "50% 50%",
-
+            transform: `scale(${VIDEO_FILL_SCALE})`,
+            transformOrigin: "50% 50%",
             display: "block",
           }}
         />
       ) : null}
 
-      {safePopups.map(
-        (popup, i) => {
-          const startSec =
-            parseTimeToSeconds(
-              popup.start_time
-            );
+      {safePopups.map((popup, i) => {
+        const startSec = parseTimeToSeconds(popup.start_time);
+        const rawEndSec = parseTimeToSeconds(popup.end_time);
+        const endSec = rawEndSec > startSec ? rawEndSec : startSec + 3;
 
-          const rawEndSec =
-            parseTimeToSeconds(
-              popup.end_time
-            );
+        const startFrame =
+          popup.start_frame ?? Math.max(0, Math.round(startSec * fps));
+        const endFrame = popup.end_frame ?? Math.round(endSec * fps);
+        const durationInFrames =
+          popup.duration_in_frames ?? Math.max(1, endFrame - startFrame);
 
-          const endSec =
-            rawEndSec > startSec
-              ? rawEndSec
-              : startSec + 3;
-
-          const startFrame =
-            popup.start_frame ??
-            Math.max(
-              0,
-              Math.round(
-                startSec * fps
-              )
-            );
-
-          const endFrame =
-            popup.end_frame ??
-            Math.round(
-              endSec * fps
-            );
-
-          const durationInFrames =
-            popup.duration_in_frames ??
-            Math.max(
-              1,
-              endFrame - startFrame
-            );
-
-          return (
-            <Sequence
-              key={`${popup.headline}-${startFrame}-${i}`}
-              from={startFrame}
-              durationInFrames={
-                durationInFrames
-              }
-            >
-              <Popup
-                popup={popup}
-                durationInFrames={
-                  durationInFrames
-                }
-              />
-            </Sequence>
-          );
-        }
-      )}
+        return (
+          <Sequence
+            key={`${popup.headline}-${startFrame}-${i}`}
+            from={startFrame}
+            durationInFrames={durationInFrames}
+          >
+            <Popup popup={popup} durationInFrames={durationInFrames} />
+          </Sequence>
+        );
+      })}
     </AbsoluteFill>
   );
 };
 
-export const MainComposition =
-  MainReel;
-
+export const MainComposition = MainReel;
 export default MainReel;

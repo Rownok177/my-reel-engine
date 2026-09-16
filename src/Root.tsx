@@ -20,16 +20,12 @@ export const RemotionRoot: React.FC = () => {
           popups: [
             {
               headline: "Meeting a Professional",
-              subtext:
-                "Working since 1992 (১৯৯২ সাল থেকে জব করছেন)",
               position: "center",
               start_time: 0.5,
               end_time: 3.0,
             },
             {
               headline: "1992: The First Step",
-              subtext:
-                "Handwritten CV (হাতে লেখা সিভি)",
               position: "center",
               start_time: 7.5,
               end_time: 12.0,
