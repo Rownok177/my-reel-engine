@@ -55,19 +55,6 @@ export type MainCompositionProps = MainReelProps;
 const REEL_WIDTH = 1080;
 const REEL_HEIGHT = 1920;
 
-// IMPORTANT:
-// The current input/output in this project is already a 9:16 (1080x1920) canvas.
-// The previous version used a ~3.18x transform on the whole video. That is wrong
-// for a 1080x1920 input because it unnecessarily magnifies/crops the source.
-// Keep the video at the reel canvas size and let the source's own framing stay intact.
-
-// The supplied reel preview has a visible picture band in the middle, with black
-// areas above/below it. All props are deliberately rendered inside this band.
-// This prevents captions/cards from landing in the black area even when Gemini says
-// "top" or "bottom".
-const VIDEO_SAFE_TOP = "34%";
-const VIDEO_SAFE_BOTTOM = "76%";
-
 const HIGHLIGHT_COLORS: Record<string, string> = {
   green: "#B7F000",
   red: "#FF3B30",
@@ -218,9 +205,10 @@ function BanglaReelHeadline({ popup }: { popup: PopupData }) {
         fontFamily: `"${fontName}", sans-serif`,
         fontSize: 54,
         fontWeight: 800,
-        lineHeight: 1.04,
+        lineHeight: 1.1,
         textAlign: "center",
         wordBreak: "break-word",
+        whiteSpace: "normal",
         overflowWrap: "anywhere",
         color: "#fff",
         textShadow:
@@ -245,65 +233,30 @@ function BanglaReelHeadline({ popup }: { popup: PopupData }) {
   );
 }
 
+// Fixed positions to map to full 9:16 reel frame and mathematically prevent right-edge clipping
 function getSafePositionStyle(position?: string): React.CSSProperties {
   const key = String(position || "center").trim();
 
-  // Horizontal placement is preserved. Vertical placement is remapped to the
-  // middle video-safe frame so overlays can NEVER enter the black letterbox area.
   switch (key) {
     case "top":
-      return { position: "absolute", top: "5%", left: "50%", width: "90%" };
+      return { position: "absolute", top: "10%", left: "5%", width: "90%" };
     case "top-left":
-      return { position: "absolute", top: "5%", left: "5%", width: "90%" };
+      return { position: "absolute", top: "10%", left: "5%", width: "85%", alignItems: "flex-start" };
     case "top-right":
-      return {
-        position: "absolute",
-        top: "5%",
-        right: "5%",
-        width: "90%",
-        alignItems: "flex-end",
-      };
+      return { position: "absolute", top: "10%", right: "5%", width: "85%", alignItems: "flex-end" };
     case "bottom":
-      return {
-        position: "absolute",
-        bottom: "5%",
-        left: "50%",
-        width: "90%",
-      };
+      return { position: "absolute", bottom: "10%", left: "5%", width: "90%" };
     case "bottom-left":
-      return { position: "absolute", bottom: "5%", left: "5%", width: "90%" };
+      return { position: "absolute", bottom: "10%", left: "5%", width: "85%", alignItems: "flex-start" };
     case "bottom-right":
-      return {
-        position: "absolute",
-        bottom: "5%",
-        right: "5%",
-        width: "90%",
-        alignItems: "flex-end",
-      };
+      return { position: "absolute", bottom: "10%", right: "5%", width: "85%", alignItems: "flex-end" };
     case "center-left":
-      return {
-        position: "absolute",
-        top: "47%",
-        left: "5%",
-        width: "90%",
-        alignItems: "flex-start",
-      };
+      return { position: "absolute", top: "50%", transform: "translateY(-50%)", left: "5%", width: "85%", alignItems: "flex-start" };
     case "center-right":
-      return {
-        position: "absolute",
-        top: "47%",
-        right: "5%",
-        width: "90%",
-        alignItems: "flex-end",
-      };
+      return { position: "absolute", top: "50%", transform: "translateY(-50%)", right: "5%", width: "85%", alignItems: "flex-end" };
     case "center":
     default:
-      return {
-        position: "absolute",
-        top: "47%",
-        left: "50%",
-        width: "90%",
-      };
+      return { position: "absolute", top: "50%", transform: "translateY(-50%)", left: "5%", width: "90%" };
   }
 }
 
@@ -355,19 +308,13 @@ const Popup: React.FC<{
   const rawPosition = getSafePositionStyle(popup.position);
   const positionStyle: React.CSSProperties = { ...rawPosition };
 
-  const isCentered =
-    popup.position === "top" ||
-    popup.position === "center" ||
-    popup.position === "bottom" ||
-    !popup.position;
-
   const textBox: React.CSSProperties = {
     width: "100%",
     maxWidth: "100%",
     boxSizing: "border-box",
     display: "flex",
     flexDirection: "column",
-    alignItems: "center",
+    alignItems: positionStyle.alignItems || "center",
     overflow: "hidden",
     transform: animationTransform,
     transformOrigin: "center center",
@@ -390,7 +337,6 @@ const Popup: React.FC<{
         ...positionStyle,
         pointerEvents: "none",
         display: "flex",
-        justifyContent: isCentered ? "center" : undefined,
         boxSizing: "border-box",
       }}
     >
@@ -420,10 +366,11 @@ const Popup: React.FC<{
               fontFamily: `"${fontName}", sans-serif`,
               fontSize: 48,
               fontWeight: 900,
-              lineHeight: 1.08,
+              lineHeight: 1.1,
               color: popup.textColor || "#fff",
               textAlign: "center",
               wordBreak: "break-word",
+              whiteSpace: "normal",
               overflowWrap: "anywhere",
             }}
           >
@@ -462,25 +409,18 @@ export const MainReel: React.FC<MainReelProps> = ({ videoUrl, popups }) => {
             inset: 0,
             width: width || REEL_WIDTH,
             height: height || REEL_HEIGHT,
-            objectFit: "cover",
+            objectFit: "cover", // This crops any PC 16:9 aspect ratio to fill perfectly top-to-bottom on a phone screen
             objectPosition: "50% 50%",
             display: "block",
           }}
         />
       ) : null}
 
-      {/*
-        Overlay clipping frame.
-        This is the actual fix for the "props entering the black box" problem.
-        Any popup that tries to go above or below this area is clipped away.
-      */}
+      {/* Frame stretches entirely to 9:16 layout without arbitrary letterbox clipping */}
       <div
         style={{
           position: "absolute",
-          left: 0,
-          right: 0,
-          top: VIDEO_SAFE_TOP,
-          height: `calc(${VIDEO_SAFE_BOTTOM} - ${VIDEO_SAFE_TOP})`,
+          inset: 0, 
           overflow: "hidden",
           pointerEvents: "none",
         }}
