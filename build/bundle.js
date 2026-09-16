@@ -17,52 +17,10 @@ var react = __webpack_require__(6540);
 
 
 
-const parseTimeToSeconds = (time) => {
-  if (time === void 0 || time === null) return 0;
-  if (typeof time === "number") return time;
-  const str = String(time).trim();
-  if (!str) return 0;
-  if (str.includes(":")) {
-    const parts = str.split(":").map(Number);
-    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    if (parts.length === 2) return parts[0] * 60 + parts[1];
-  }
-  const parsed = parseFloat(str);
-  return Number.isNaN(parsed) ? 0 : parsed;
-};
-const LETTERBOX_CONTENT_ASPECT = 16 / 9;
-const PORTRAIT_ASPECT = 9 / 16;
-const PORTRAIT_FILL_SCALE = Math.max(1, 1 / PORTRAIT_ASPECT / (1 / LETTERBOX_CONTENT_ASPECT));
-const VIDEO_FILL_SCALE = Math.max(3.18, PORTRAIT_FILL_SCALE);
-const POSITION_STYLES = {
-  top: { position: "absolute", top: "10%", left: "50%", width: "80%" },
-  "top-left": { position: "absolute", top: "10%", left: "5%", width: "80%" },
-  "top-right": {
-    position: "absolute",
-    top: "10%",
-    right: "5%",
-    width: "80%",
-    alignItems: "flex-end"
-  },
-  center: { position: "absolute", top: "62%", left: "50%", width: "80%" },
-  "center-left": { position: "absolute", top: "62%", left: "5%", width: "80%" },
-  "center-right": {
-    position: "absolute",
-    top: "62%",
-    right: "5%",
-    width: "80%",
-    alignItems: "flex-end"
-  },
-  bottom: { position: "absolute", bottom: "8%", left: "50%", width: "80%" },
-  "bottom-left": { position: "absolute", bottom: "8%", left: "5%", width: "80%" },
-  "bottom-right": {
-    position: "absolute",
-    bottom: "8%",
-    right: "5%",
-    width: "80%",
-    alignItems: "flex-end"
-  }
-};
+const REEL_WIDTH = 1080;
+const REEL_HEIGHT = 1920;
+const VIDEO_SAFE_TOP = "34%";
+const VIDEO_SAFE_BOTTOM = "76%";
 const HIGHLIGHT_COLORS = {
   green: "#B7F000",
   red: "#FF3B30",
@@ -88,22 +46,40 @@ const FONT_CONFIG = {
 };
 function normalizeFontName(value) {
   const name = String(value || "Hind Siliguri").trim();
-  if (name in FONT_CONFIG) return name;
-  return "Hind Siliguri";
+  return name in FONT_CONFIG ? name : "Hind Siliguri";
 }
 function getHighlightColor(value) {
   return HIGHLIGHT_COLORS[String(value || "green").toLowerCase()] || HIGHLIGHT_COLORS.green;
 }
+function parseTimeToSeconds(time) {
+  if (time === void 0 || time === null) return 0;
+  if (typeof time === "number") return Number.isFinite(time) ? time : 0;
+  const value = String(time).trim();
+  if (!value) return 0;
+  if (value.includes(":")) {
+    const parts = value.split(":").map(Number);
+    if (parts.length === 3 && parts.every(Number.isFinite)) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+    if (parts.length === 2 && parts.every(Number.isFinite)) {
+      return parts[0] * 60 + parts[1];
+    }
+  }
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 function FontLoader() {
   const handleRef = (0,react.useRef)(null);
-  const [handle] = react.useState(() => (0,esm.delayRender)("Loading local caption fonts"));
+  const [handle] = react.useState(
+    () => (0,esm.delayRender)("Loading local caption fonts")
+  );
   (0,react.useEffect)(() => {
     handleRef.current = handle;
     let cancelled = false;
     const load = async () => {
       try {
-        const fontEntries = Object.values(FONT_CONFIG);
-        for (const font of fontEntries) {
+        const entries = Object.values(FONT_CONFIG);
+        for (const font of entries) {
           const face = new FontFace(font.family, `url("${font.src}")`, {
             weight: font.weight,
             style: "normal",
@@ -113,10 +89,12 @@ function FontLoader() {
           document.fonts.add(loaded);
         }
         await Promise.all(
-          fontEntries.map((font) => document.fonts.load(`800 56px "${font.family}"`))
+          entries.map(
+            (font) => document.fonts.load(`800 56px "${font.family}"`)
+          )
         );
       } catch (error) {
-        console.error("[Fonts] Failed to load one or more local fonts:", error);
+        console.error("[Fonts] Failed to load local fonts:", error);
       } finally {
         if (!cancelled && handleRef.current !== null) {
           (0,esm.continueRender)(handleRef.current);
@@ -136,7 +114,9 @@ function splitBanglaReelText(headline, requestedHighlight) {
   if (!text) return { before: "", highlight: "", after: "" };
   const requested = String(requestedHighlight || "").trim();
   if (requested) {
-    const index = text.toLocaleLowerCase().lastIndexOf(requested.toLocaleLowerCase());
+    const textLower = text.toLocaleLowerCase();
+    const requestedLower = requested.toLocaleLowerCase();
+    const index = textLower.lastIndexOf(requestedLower);
     if (index >= 0) {
       return {
         before: text.slice(0, index),
@@ -152,53 +132,104 @@ function BanglaReelHeadline({ popup }) {
     popup.headline,
     popup.highlightText
   );
-  const accent = getHighlightColor(popup.highlightColor);
   const fontName = normalizeFontName(popup.fontFamily);
+  const accent = getHighlightColor(popup.highlightColor);
   return /* @__PURE__ */ (0,jsx_runtime.jsxs)(
     "div",
     {
       style: {
+        width: "100%",
+        maxWidth: "100%",
+        margin: 0,
+        boxSizing: "border-box",
         fontFamily: `"${fontName}", sans-serif`,
         fontSize: 54,
         fontWeight: 800,
-        lineHeight: 1.02,
+        lineHeight: 1.04,
         textAlign: "center",
         wordBreak: "break-word",
         overflowWrap: "anywhere",
-        textShadow: "-2px -2px 0 rgba(0,0,0,0.95), 2px -2px 0 rgba(0,0,0,0.95), -2px 2px 0 rgba(0,0,0,0.95), 2px 2px 0 rgba(0,0,0,0.95), 0 4px 12px rgba(0,0,0,0.85)",
-        maxWidth: "100%",
-        margin: "0 auto",
-        overflow: "hidden",
-        boxSizing: "border-box"
+        color: "#fff",
+        textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 4px 12px rgba(0,0,0,.85)"
       },
       children: [
-        /* @__PURE__ */ (0,jsx_runtime.jsx)("span", { style: { color: "#FFFFFF" }, children: before }),
+        /* @__PURE__ */ (0,jsx_runtime.jsx)("span", { children: before }),
         highlight ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
           "span",
           {
             style: {
               color: accent,
               fontWeight: 900,
-              fontSize: "1.28em",
-              display: "inline-block",
-              marginInline: "0.08em",
-              textShadow: "-2px -2px 0 rgba(0,0,0,0.98), 2px -2px 0 rgba(0,0,0,0.98), -2px 2px 0 rgba(0,0,0,0.98), 2px 2px 0 rgba(0,0,0,0.98), 0 5px 16px rgba(0,0,0,0.8)"
+              fontSize: "1.18em",
+              marginInline: "0.06em"
             },
             children: highlight
           }
         ) : null,
-        after ? /* @__PURE__ */ (0,jsx_runtime.jsxs)("span", { style: { color: "#FFFFFF" }, children: [
-          " ",
-          after
-        ] }) : null
+        after ? /* @__PURE__ */ (0,jsx_runtime.jsx)("span", { children: after }) : null
       ]
     }
   );
 }
-const Popup = ({
-  popup,
-  durationInFrames
-}) => {
+function getSafePositionStyle(position) {
+  const key = String(position || "center").trim();
+  switch (key) {
+    case "top":
+      return { position: "absolute", top: "5%", left: "50%", width: "90%" };
+    case "top-left":
+      return { position: "absolute", top: "5%", left: "5%", width: "90%" };
+    case "top-right":
+      return {
+        position: "absolute",
+        top: "5%",
+        right: "5%",
+        width: "90%",
+        alignItems: "flex-end"
+      };
+    case "bottom":
+      return {
+        position: "absolute",
+        bottom: "5%",
+        left: "50%",
+        width: "90%"
+      };
+    case "bottom-left":
+      return { position: "absolute", bottom: "5%", left: "5%", width: "90%" };
+    case "bottom-right":
+      return {
+        position: "absolute",
+        bottom: "5%",
+        right: "5%",
+        width: "90%",
+        alignItems: "flex-end"
+      };
+    case "center-left":
+      return {
+        position: "absolute",
+        top: "47%",
+        left: "5%",
+        width: "90%",
+        alignItems: "flex-start"
+      };
+    case "center-right":
+      return {
+        position: "absolute",
+        top: "47%",
+        right: "5%",
+        width: "90%",
+        alignItems: "flex-end"
+      };
+    case "center":
+    default:
+      return {
+        position: "absolute",
+        top: "47%",
+        left: "50%",
+        width: "90%"
+      };
+  }
+}
+const Popup = ({ popup, durationInFrames }) => {
   const frame = (0,esm.useCurrentFrame)();
   const { fps } = (0,esm.useVideoConfig)();
   const safeDuration = Math.max(1, durationInFrames);
@@ -210,67 +241,61 @@ const Popup = ({
     [0, 1, 1, 0],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
   );
-  let animationTransform = "";
-  const animType = popup.animationType || "bounce";
-  if (animType === "bounce" || animType === "spring") {
-    const scaleSpring = (0,esm.spring)({
+  const animationType = popup.animationType || "bounce";
+  let animationTransform = "scale(1)";
+  if (animationType === "bounce" || animationType === "spring") {
+    animationTransform = `scale(${(0,esm.spring)({
       frame,
       fps,
-      config: { damping: 11, stiffness: 120 }
-    });
-    animationTransform = `scale(${scaleSpring})`;
-  } else if (animType === "zoom-out") {
-    const scaleZoom = (0,esm.interpolate)(frame, [0, fadeFrames], [1.4, 1], {
+      config: { damping: 12, stiffness: 110 }
+    })})`;
+  } else if (animationType === "zoom-out") {
+    const scale = (0,esm.interpolate)(frame, [0, fadeFrames], [1.12, 1], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp"
     });
-    animationTransform = `scale(${scaleZoom})`;
-  } else if (animType === "slide") {
-    const translateY = (0,esm.interpolate)(frame, [0, fadeFrames], [-40, 0], {
+    animationTransform = `scale(${scale})`;
+  } else if (animationType === "slide") {
+    const y = (0,esm.interpolate)(frame, [0, fadeFrames], [-24, 0], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp"
     });
-    animationTransform = `translateY(${translateY}px)`;
-  } else {
-    const scaleDefault = (0,esm.interpolate)(frame, [0, fadeFrames], [0.85, 1], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp"
-    });
-    animationTransform = `scale(${scaleDefault})`;
+    animationTransform = `translateY(${y}px)`;
   }
-  const positionKey = popup.position || "center";
-  const positionStyle = POSITION_STYLES[positionKey] || POSITION_STYLES.center;
-  let positionalTransform = "";
-  if (positionKey === "top" || positionKey === "center" || positionKey === "bottom") {
-    positionalTransform = "translateX(-50%)";
-  }
-  const isBanglaReel = popup.theme === "bangla_reel";
+  const theme = popup.theme === "bangla_reel" ? "bangla_reel" : "bold_clean";
   const fontName = normalizeFontName(popup.fontFamily);
-  const containerStyle = {
-    backgroundColor: isBanglaReel ? "transparent" : popup.bgColor || "rgba(15, 23, 42, 0.92)",
-    border: isBanglaReel ? "none" : `2px solid ${popup.borderColor || "#4ADE80"}`,
-    borderRadius: isBanglaReel ? 0 : 20,
-    padding: isBanglaReel ? "4px 8px" : "18px 30px",
-    boxShadow: isBanglaReel ? "none" : "0 20px 30px rgba(0,0,0,0.5)",
-    backdropFilter: isBanglaReel ? "none" : "blur(10px)",
+  const isBanglaReel = theme === "bangla_reel";
+  const accent = getHighlightColor(popup.highlightColor);
+  const rawPosition = getSafePositionStyle(popup.position);
+  const positionStyle = { ...rawPosition };
+  const isCentered = popup.position === "top" || popup.position === "center" || popup.position === "bottom" || !popup.position;
+  const textBox = {
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    maxWidth: isBanglaReel ? "88%" : "80%",
-    boxSizing: "border-box",
-    transform: `${positionalTransform} ${animationTransform}`.trim()
+    overflow: "hidden",
+    transform: animationTransform,
+    transformOrigin: "center center",
+    backgroundColor: isBanglaReel ? "transparent" : popup.bgColor || "rgba(15,23,42,.90)",
+    border: isBanglaReel ? "none" : `2px solid ${popup.borderColor || accent}`,
+    borderRadius: isBanglaReel ? 0 : 18,
+    padding: isBanglaReel ? "4px 8px" : "14px 22px",
+    boxShadow: isBanglaReel ? "none" : "0 12px 24px rgba(0,0,0,.40)"
   };
-  const positionWithoutTransform = { ...positionStyle };
-  delete positionWithoutTransform.transform;
   return /* @__PURE__ */ (0,jsx_runtime.jsx)(
     "div",
     {
       style: {
-        ...positionWithoutTransform,
+        ...positionStyle,
         pointerEvents: "none",
+        display: "flex",
+        justifyContent: isCentered ? "center" : void 0,
         boxSizing: "border-box"
       },
-      children: /* @__PURE__ */ (0,jsx_runtime.jsxs)("div", { style: { opacity, ...containerStyle }, children: [
+      children: /* @__PURE__ */ (0,jsx_runtime.jsxs)("div", { style: { ...textBox, opacity }, children: [
         popup.badgeText ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
           "div",
           {
@@ -278,31 +303,25 @@ const Popup = ({
               fontFamily: `"${fontName}", sans-serif`,
               fontSize: 14,
               fontWeight: 800,
-              letterSpacing: "0.1em",
-              color: popup.borderColor || "#4ADE80",
-              marginBottom: 6
+              color: popup.borderColor || accent,
+              marginBottom: 5,
+              textAlign: "center",
+              maxWidth: "100%"
             },
             children: popup.badgeText
           }
         ) : null,
-        isBanglaReel ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
-          BanglaReelHeadline,
-          {
-            popup: {
-              ...popup,
-              highlightColor: popup.highlightColor || "green"
-            }
-          }
-        ) : /* @__PURE__ */ (0,jsx_runtime.jsx)(
+        isBanglaReel ? /* @__PURE__ */ (0,jsx_runtime.jsx)(BanglaReelHeadline, { popup }) : /* @__PURE__ */ (0,jsx_runtime.jsx)(
           "div",
           {
             style: {
+              width: "100%",
               fontFamily: `"${fontName}", sans-serif`,
               fontSize: 48,
               fontWeight: 900,
-              color: popup.textColor || "#FFFFFF",
+              lineHeight: 1.08,
+              color: popup.textColor || "#fff",
               textAlign: "center",
-              lineHeight: 1.1,
               wordBreak: "break-word",
               overflowWrap: "anywhere"
             },
@@ -314,49 +333,70 @@ const Popup = ({
   );
 };
 const MainReel = ({ videoUrl, popups }) => {
-  const { fps } = (0,esm.useVideoConfig)();
+  const { fps, width, height } = (0,esm.useVideoConfig)();
   const safePopups = Array.isArray(popups) ? popups : [];
-  let cleanUrl = String(videoUrl || "").trim();
-  if (!cleanUrl || cleanUrl === "undefined" || cleanUrl === "null" || cleanUrl.includes("remotion-assets.s3") || cleanUrl.includes("commondatastorage.googleapis.com")) {
-    cleanUrl = "https://vjs.zencdn.net/v/oceans.mp4";
-  }
-  return /* @__PURE__ */ (0,jsx_runtime.jsxs)(esm.AbsoluteFill, { style: { backgroundColor: "black", overflow: "hidden" }, children: [
-    /* @__PURE__ */ (0,jsx_runtime.jsx)(FontLoader, {}),
-    cleanUrl ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
-      esm.OffthreadVideo,
-      {
-        src: cleanUrl,
-        onError: (err) => console.warn("Video stream load warning:", err),
-        style: {
-          position: "absolute",
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          objectPosition: "50% 50%",
-          transform: `scale(${VIDEO_FILL_SCALE})`,
-          transformOrigin: "50% 50%",
-          display: "block"
-        }
-      }
-    ) : null,
-    safePopups.map((popup, i) => {
-      const startSec = parseTimeToSeconds(popup.start_time);
-      const rawEndSec = parseTimeToSeconds(popup.end_time);
-      const endSec = rawEndSec > startSec ? rawEndSec : startSec + 3;
-      const startFrame = popup.start_frame ?? Math.max(0, Math.round(startSec * fps));
-      const endFrame = popup.end_frame ?? Math.round(endSec * fps);
-      const durationInFrames = popup.duration_in_frames ?? Math.max(1, endFrame - startFrame);
-      return /* @__PURE__ */ (0,jsx_runtime.jsx)(
-        esm.Sequence,
-        {
-          from: startFrame,
-          durationInFrames,
-          children: /* @__PURE__ */ (0,jsx_runtime.jsx)(Popup, { popup, durationInFrames })
-        },
-        `${popup.headline}-${startFrame}-${i}`
-      );
-    })
-  ] });
+  const cleanUrl = String(videoUrl || "").trim();
+  return /* @__PURE__ */ (0,jsx_runtime.jsxs)(
+    esm.AbsoluteFill,
+    {
+      style: {
+        width: REEL_WIDTH,
+        height: REEL_HEIGHT,
+        backgroundColor: "#000",
+        overflow: "hidden"
+      },
+      children: [
+        /* @__PURE__ */ (0,jsx_runtime.jsx)(FontLoader, {}),
+        cleanUrl ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
+          esm.OffthreadVideo,
+          {
+            src: cleanUrl,
+            onError: (err) => console.warn("[Video] Failed to load source video:", err),
+            style: {
+              position: "absolute",
+              inset: 0,
+              width: width || REEL_WIDTH,
+              height: height || REEL_HEIGHT,
+              objectFit: "cover",
+              objectPosition: "50% 50%",
+              display: "block"
+            }
+          }
+        ) : null,
+        /* @__PURE__ */ (0,jsx_runtime.jsx)(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: VIDEO_SAFE_TOP,
+              height: `calc(${VIDEO_SAFE_BOTTOM} - ${VIDEO_SAFE_TOP})`,
+              overflow: "hidden",
+              pointerEvents: "none"
+            },
+            children: safePopups.map((popup, index) => {
+              const startSec = parseTimeToSeconds(popup.start_time);
+              const endRaw = parseTimeToSeconds(popup.end_time);
+              const endSec = endRaw > startSec ? endRaw : startSec + 3;
+              const startFrame = popup.start_frame ?? Math.max(0, Math.round(startSec * fps));
+              const endFrame = popup.end_frame ?? Math.max(startFrame + 1, Math.round(endSec * fps));
+              const durationInFrames = popup.duration_in_frames ?? Math.max(1, endFrame - startFrame);
+              return /* @__PURE__ */ (0,jsx_runtime.jsx)(
+                esm.Sequence,
+                {
+                  from: startFrame,
+                  durationInFrames,
+                  children: /* @__PURE__ */ (0,jsx_runtime.jsx)(Popup, { popup, durationInFrames })
+                },
+                `${popup.headline}-${startFrame}-${index}`
+              );
+            })
+          }
+        )
+      ]
+    }
+  );
 };
 const MainComposition = MainReel;
 /* harmony default export */ const Composition = ((/* unused pure expression or super */ null && (MainReel)));
@@ -1203,6 +1243,9 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/*! tailwindcss v4.2.0 | MIT License |
   }
 }
 @layer utilities {
+  .visible {
+    visibility: visible;
+  }
   .absolute {
     position: absolute;
   }
@@ -1295,7 +1338,7 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/*! tailwindcss v4.2.0 | MIT License |
     }
   }
 }
-`, "",{"version":3,"sources":["webpack://./src/index.css"],"names":[],"mappings":"AAAA,gEAAgE;AAChE,iBAAiB;AACjB,yCAAyC;AACzC;EACE;IACE;6DACyD;IACzD;iDAC6C;IAC7C,kBAAkB;IAClB,oCAAoC;IACpC,kEAAkE;IAClE,uCAAuC;IACvC,wEAAwE;IACxE;;KAEC;IACD,4CAA4C;IAC5C;;KAEC;IACD;;KAEC;EACH;AACF;AACA;EACE;IACE,sBAAsB;IACtB,SAAS;IACT,UAAU;IACV,eAAe;EACjB;EACA;IACE,gBAAgB;IAChB,8BAA8B;IAC9B,WAAW;IACX,6JAA6J;IAC7J,mEAAmE;IACnE,yEAAyE;IACzE,wCAAwC;EAC1C;EACA;IACE,oBAAoB;EACtB;EACA;IACE,SAAS;IACT,cAAc;IACd,qBAAqB;EACvB;EACA;IACE,yCAAyC;IACzC,iCAAiC;EACnC;EACA;IACE,kBAAkB;IAClB,oBAAoB;EACtB;EACA;IACE,cAAc;IACd,gCAAgC;IAChC,wBAAwB;EAC1B;EACA;IACE,mBAAmB;EACrB;EACA;IACE,kJAAkJ;IAClJ,0EAA0E;IAC1E,8EAA8E;IAC9E,cAAc;EAChB;EACA;IACE,cAAc;EAChB;EACA;IACE,cAAc;IACd,cAAc;IACd,kBAAkB;IAClB,wBAAwB;EAC1B;EACA;IACE,eAAe;EACjB;EACA;IACE,WAAW;EACb;EACA;IACE,cAAc;IACd,qBAAqB;IACrB,yBAAyB;EAC3B;EACA;IACE,aAAa;EACf;EACA;IACE,wBAAwB;EAC1B;EACA;IACE,kBAAkB;EACpB;EACA;IACE,gBAAgB;EAClB;EACA;IACE,cAAc;IACd,sBAAsB;EACxB;EACA;IACE,eAAe;IACf,YAAY;EACd;EACA;IACE,aAAa;IACb,8BAA8B;IAC9B,gCAAgC;IAChC,uBAAuB;IACvB,cAAc;IACd,gBAAgB;IAChB,6BAA6B;IAC7B,UAAU;EACZ;EACA;IACE,mBAAmB;EACrB;EACA;IACE,0BAA0B;EAC5B;EACA;IACE,sBAAsB;EACxB;EACA;IACE,UAAU;IACV,mBAAmB;IACnB;MACE,yDAAyD;IAC3D;EACF;EACA;IACE,gBAAgB;EAClB;EACA;IACE,wBAAwB;EAC1B;EACA;IACE,eAAe;IACf,mBAAmB;EACrB;EACA;IACE,oBAAoB;EACtB;EACA;IACE,UAAU;EACZ;EACA;IACE,gBAAgB;EAClB;EACA;IACE,gBAAgB;EAClB;EACA;IACE,kBAAkB;EACpB;EACA;IACE,YAAY;EACd;EACA;IACE,wBAAwB;EAC1B;AACF;AACA;EACE;IACE,kBAAkB;EACpB;EACA;IACE,kCAAkC;EACpC;EACA;IACE,gCAAgC;EAClC;EACA;IACE,WAAW;IACX;MACE,gBAAgB;IAClB;IACA;MACE,gBAAgB;IAClB;IACA;MACE,gBAAgB;IAClB;IACA;MACE,gBAAgB;IAClB;IACA;MACE,gBAAgB;IAClB;EACF;EACA;IACE,cAAc;EAChB;EACA;IACE,aAAa;EACf;EACA;IACE,aAAa;EACf;EACA;IACE,qBAAqB;EACvB;EACA;IACE,0GAA0G;EAC5G;EACA;IACE,oCAAoC;IACpC,iBAAiB;EACnB;EACA;IACE,yBAAyB;EAC3B;EACA;IACE,yUAAyU;IACzU,qFAAqF;IACrF,2EAA2E;EAC7E;AACF;AACA;EACE,WAAW;EACX,eAAe;AACjB;AACA;EACE,WAAW;EACX,eAAe;AACjB;AACA;EACE,WAAW;EACX,eAAe;AACjB;AACA;EACE,WAAW;EACX,eAAe;AACjB;AACA;EACE,WAAW;EACX,eAAe;AACjB;AACA;EACE,WAAW;EACX,eAAe;EACf,oBAAoB;AACtB;AACA;EACE;IACE;MACE,sBAAsB;MACtB,sBAAsB;MACtB,sBAAsB;MACtB,oBAAoB;MACpB,oBAAoB;MACpB,wBAAwB;IAC1B;EACF;AACF","sourcesContent":["/*! tailwindcss v4.2.0 | MIT License | https://tailwindcss.com */\n@layer properties;\n@layer theme, base, components, utilities;\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\",\n      \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,\n      \"Liberation Mono\", \"Courier New\", monospace;\n    --spacing: 0.25rem;\n    --default-transition-duration: 150ms;\n    --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);\n    --default-font-family: var(--font-sans);\n    --default-font-feature-settings: var(--font-sans--font-feature-settings);\n    --default-font-variation-settings: var(\n      --font-sans--font-variation-settings\n    );\n    --default-mono-font-family: var(--font-mono);\n    --default-mono-font-feature-settings: var(\n      --font-mono--font-feature-settings\n    );\n    --default-mono-font-variation-settings: var(\n      --font-mono--font-variation-settings\n    );\n  }\n}\n@layer base {\n  *, ::after, ::before, ::backdrop, ::file-selector-button {\n    box-sizing: border-box;\n    margin: 0;\n    padding: 0;\n    border: 0 solid;\n  }\n  html, :host {\n    line-height: 1.5;\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    font-family: var( --default-font-family, ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\" );\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var( --default-font-variation-settings, normal );\n    -webkit-tap-highlight-color: transparent;\n  }\n  body {\n    line-height: inherit;\n  }\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n  b, strong {\n    font-weight: bolder;\n  }\n  code, kbd, samp, pre {\n    font-family: var( --default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace );\n    font-feature-settings: var( --default-mono-font-feature-settings, normal );\n    font-variation-settings: var( --default-mono-font-variation-settings, normal );\n    font-size: 1em;\n  }\n  small {\n    font-size: 80%;\n  }\n  sub, sup {\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n    vertical-align: baseline;\n  }\n  sub {\n    bottom: -0.25em;\n  }\n  sup {\n    top: -0.5em;\n  }\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n  :-moz-focusring {\n    outline: auto;\n  }\n  progress {\n    vertical-align: baseline;\n  }\n  summary {\n    display: list-item;\n  }\n  ol, ul, menu {\n    list-style: none;\n  }\n  img, svg, video, canvas, audio, iframe, embed, object {\n    display: block;\n    vertical-align: middle;\n  }\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n  button, input, select, optgroup, textarea, ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    border-radius: 0;\n    background-color: transparent;\n    opacity: 1;\n  }\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n  ::placeholder {\n    opacity: 1;\n    color: currentColor;\n    @supports (color: color-mix(in lab, red, red)) {\n      color: color-mix(in oklab, currentColor 50%, transparent);\n    }\n  }\n  textarea {\n    resize: vertical;\n  }\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n  ::-webkit-datetime-edit, ::-webkit-datetime-edit-year-field, ::-webkit-datetime-edit-month-field, ::-webkit-datetime-edit-day-field, ::-webkit-datetime-edit-hour-field, ::-webkit-datetime-edit-minute-field, ::-webkit-datetime-edit-second-field, ::-webkit-datetime-edit-millisecond-field, ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n  button, input:where([type=\"button\"], [type=\"reset\"], [type=\"submit\"]), ::file-selector-button {\n    appearance: button;\n  }\n  ::-webkit-inner-spin-button, ::-webkit-outer-spin-button {\n    height: auto;\n  }\n  [hidden]:where(:not([hidden=\"until-found\"])) {\n    display: none !important;\n  }\n}\n@layer utilities {\n  .absolute {\n    position: absolute;\n  }\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n  .container {\n    width: 100%;\n    @media (width >= 40rem) {\n      max-width: 40rem;\n    }\n    @media (width >= 48rem) {\n      max-width: 48rem;\n    }\n    @media (width >= 64rem) {\n      max-width: 64rem;\n    }\n    @media (width >= 80rem) {\n      max-width: 80rem;\n    }\n    @media (width >= 96rem) {\n      max-width: 96rem;\n    }\n  }\n  .block {\n    display: block;\n  }\n  .flex {\n    display: flex;\n  }\n  .hidden {\n    display: none;\n  }\n  .inline-block {\n    display: inline-block;\n  }\n  .transform {\n    transform: var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,);\n  }\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n  .uppercase {\n    text-transform: uppercase;\n  }\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n}\n@property --tw-rotate-x {\n  syntax: \"*\";\n  inherits: false;\n}\n@property --tw-rotate-y {\n  syntax: \"*\";\n  inherits: false;\n}\n@property --tw-rotate-z {\n  syntax: \"*\";\n  inherits: false;\n}\n@property --tw-skew-x {\n  syntax: \"*\";\n  inherits: false;\n}\n@property --tw-skew-y {\n  syntax: \"*\";\n  inherits: false;\n}\n@property --tw-border-style {\n  syntax: \"*\";\n  inherits: false;\n  initial-value: solid;\n}\n@layer properties {\n  @supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {\n    *, ::before, ::after, ::backdrop {\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-border-style: solid;\n    }\n  }\n}\n"],"sourceRoot":""}]);
+`, "",{"version":3,"sources":["webpack://./src/index.css"],"names":[],"mappings":"AAAA,gEAAgE;AAChE,iBAAiB;AACjB,yCAAyC;AACzC;EACE;IACE;6DACyD;IACzD;iDAC6C;IAC7C,kBAAkB;IAClB,oCAAoC;IACpC,kEAAkE;IAClE,uCAAuC;IACvC,wEAAwE;IACxE;;KAEC;IACD,4CAA4C;IAC5C;;KAEC;IACD;;KAEC;EACH;AACF;AACA;EACE;IACE,sBAAsB;IACtB,SAAS;IACT,UAAU;IACV,eAAe;EACjB;EACA;IACE,gBAAgB;IAChB,8BAA8B;IAC9B,WAAW;IACX,6JAA6J;IAC7J,mEAAmE;IACnE,yEAAyE;IACzE,wCAAwC;EAC1C;EACA;IACE,oBAAoB;EACtB;EACA;IACE,SAAS;IACT,cAAc;IACd,qBAAqB;EACvB;EACA;IACE,yCAAyC;IACzC,iCAAiC;EACnC;EACA;IACE,kBAAkB;IAClB,oBAAoB;EACtB;EACA;IACE,cAAc;IACd,gCAAgC;IAChC,wBAAwB;EAC1B;EACA;IACE,mBAAmB;EACrB;EACA;IACE,kJAAkJ;IAClJ,0EAA0E;IAC1E,8EAA8E;IAC9E,cAAc;EAChB;EACA;IACE,cAAc;EAChB;EACA;IACE,cAAc;IACd,cAAc;IACd,kBAAkB;IAClB,wBAAwB;EAC1B;EACA;IACE,eAAe;EACjB;EACA;IACE,WAAW;EACb;EACA;IACE,cAAc;IACd,qBAAqB;IACrB,yBAAyB;EAC3B;EACA;IACE,aAAa;EACf;EACA;IACE,wBAAwB;EAC1B;EACA;IACE,kBAAkB;EACpB;EACA;IACE,gBAAgB;EAClB;EACA;IACE,cAAc;IACd,sBAAsB;EACxB;EACA;IACE,eAAe;IACf,YAAY;EACd;EACA;IACE,aAAa;IACb,8BAA8B;IAC9B,gCAAgC;IAChC,uBAAuB;IACvB,cAAc;IACd,gBAAgB;IAChB,6BAA6B;IAC7B,UAAU;EACZ;EACA;IACE,mBAAmB;EACrB;EACA;IACE,0BAA0B;EAC5B;EACA;IACE,sBAAsB;EACxB;EACA;IACE,UAAU;IACV,mBAAmB;IACnB;MACE,yDAAyD;IAC3D;EACF;EACA;IACE,gBAAgB;EAClB;EACA;IACE,wBAAwB;EAC1B;EACA;IACE,eAAe;IACf,mBAAmB;EACrB;EACA;IACE,oBAAoB;EACtB;EACA;IACE,UAAU;EACZ;EACA;IACE,gBAAgB;EAClB;EACA;IACE,gBAAgB;EAClB;EACA;IACE,kBAAkB;EACpB;EACA;IACE,YAAY;EACd;EACA;IACE,wBAAwB;EAC1B;AACF;AACA;EACE;IACE,mBAAmB;EACrB;EACA;IACE,kBAAkB;EACpB;EACA;IACE,kCAAkC;EACpC;EACA;IACE,gCAAgC;EAClC;EACA;IACE,WAAW;IACX;MACE,gBAAgB;IAClB;IACA;MACE,gBAAgB;IAClB;IACA;MACE,gBAAgB;IAClB;IACA;MACE,gBAAgB;IAClB;IACA;MACE,gBAAgB;IAClB;EACF;EACA;IACE,cAAc;EAChB;EACA;IACE,aAAa;EACf;EACA;IACE,aAAa;EACf;EACA;IACE,qBAAqB;EACvB;EACA;IACE,0GAA0G;EAC5G;EACA;IACE,oCAAoC;IACpC,iBAAiB;EACnB;EACA;IACE,yBAAyB;EAC3B;EACA;IACE,yUAAyU;IACzU,qFAAqF;IACrF,2EAA2E;EAC7E;AACF;AACA;EACE,WAAW;EACX,eAAe;AACjB;AACA;EACE,WAAW;EACX,eAAe;AACjB;AACA;EACE,WAAW;EACX,eAAe;AACjB;AACA;EACE,WAAW;EACX,eAAe;AACjB;AACA;EACE,WAAW;EACX,eAAe;AACjB;AACA;EACE,WAAW;EACX,eAAe;EACf,oBAAoB;AACtB;AACA;EACE;IACE;MACE,sBAAsB;MACtB,sBAAsB;MACtB,sBAAsB;MACtB,oBAAoB;MACpB,oBAAoB;MACpB,wBAAwB;IAC1B;EACF;AACF","sourcesContent":["/*! tailwindcss v4.2.0 | MIT License | https://tailwindcss.com */\n@layer properties;\n@layer theme, base, components, utilities;\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\",\n      \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,\n      \"Liberation Mono\", \"Courier New\", monospace;\n    --spacing: 0.25rem;\n    --default-transition-duration: 150ms;\n    --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);\n    --default-font-family: var(--font-sans);\n    --default-font-feature-settings: var(--font-sans--font-feature-settings);\n    --default-font-variation-settings: var(\n      --font-sans--font-variation-settings\n    );\n    --default-mono-font-family: var(--font-mono);\n    --default-mono-font-feature-settings: var(\n      --font-mono--font-feature-settings\n    );\n    --default-mono-font-variation-settings: var(\n      --font-mono--font-variation-settings\n    );\n  }\n}\n@layer base {\n  *, ::after, ::before, ::backdrop, ::file-selector-button {\n    box-sizing: border-box;\n    margin: 0;\n    padding: 0;\n    border: 0 solid;\n  }\n  html, :host {\n    line-height: 1.5;\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    font-family: var( --default-font-family, ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\" );\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var( --default-font-variation-settings, normal );\n    -webkit-tap-highlight-color: transparent;\n  }\n  body {\n    line-height: inherit;\n  }\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n  b, strong {\n    font-weight: bolder;\n  }\n  code, kbd, samp, pre {\n    font-family: var( --default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace );\n    font-feature-settings: var( --default-mono-font-feature-settings, normal );\n    font-variation-settings: var( --default-mono-font-variation-settings, normal );\n    font-size: 1em;\n  }\n  small {\n    font-size: 80%;\n  }\n  sub, sup {\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n    vertical-align: baseline;\n  }\n  sub {\n    bottom: -0.25em;\n  }\n  sup {\n    top: -0.5em;\n  }\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n  :-moz-focusring {\n    outline: auto;\n  }\n  progress {\n    vertical-align: baseline;\n  }\n  summary {\n    display: list-item;\n  }\n  ol, ul, menu {\n    list-style: none;\n  }\n  img, svg, video, canvas, audio, iframe, embed, object {\n    display: block;\n    vertical-align: middle;\n  }\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n  button, input, select, optgroup, textarea, ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    border-radius: 0;\n    background-color: transparent;\n    opacity: 1;\n  }\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n  ::placeholder {\n    opacity: 1;\n    color: currentColor;\n    @supports (color: color-mix(in lab, red, red)) {\n      color: color-mix(in oklab, currentColor 50%, transparent);\n    }\n  }\n  textarea {\n    resize: vertical;\n  }\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n  ::-webkit-datetime-edit, ::-webkit-datetime-edit-year-field, ::-webkit-datetime-edit-month-field, ::-webkit-datetime-edit-day-field, ::-webkit-datetime-edit-hour-field, ::-webkit-datetime-edit-minute-field, ::-webkit-datetime-edit-second-field, ::-webkit-datetime-edit-millisecond-field, ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n  button, input:where([type=\"button\"], [type=\"reset\"], [type=\"submit\"]), ::file-selector-button {\n    appearance: button;\n  }\n  ::-webkit-inner-spin-button, ::-webkit-outer-spin-button {\n    height: auto;\n  }\n  [hidden]:where(:not([hidden=\"until-found\"])) {\n    display: none !important;\n  }\n}\n@layer utilities {\n  .visible {\n    visibility: visible;\n  }\n  .absolute {\n    position: absolute;\n  }\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n  .container {\n    width: 100%;\n    @media (width >= 40rem) {\n      max-width: 40rem;\n    }\n    @media (width >= 48rem) {\n      max-width: 48rem;\n    }\n    @media (width >= 64rem) {\n      max-width: 64rem;\n    }\n    @media (width >= 80rem) {\n      max-width: 80rem;\n    }\n    @media (width >= 96rem) {\n      max-width: 96rem;\n    }\n  }\n  .block {\n    display: block;\n  }\n  .flex {\n    display: flex;\n  }\n  .hidden {\n    display: none;\n  }\n  .inline-block {\n    display: inline-block;\n  }\n  .transform {\n    transform: var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,);\n  }\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n  .uppercase {\n    text-transform: uppercase;\n  }\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n}\n@property --tw-rotate-x {\n  syntax: \"*\";\n  inherits: false;\n}\n@property --tw-rotate-y {\n  syntax: \"*\";\n  inherits: false;\n}\n@property --tw-rotate-z {\n  syntax: \"*\";\n  inherits: false;\n}\n@property --tw-skew-x {\n  syntax: \"*\";\n  inherits: false;\n}\n@property --tw-skew-y {\n  syntax: \"*\";\n  inherits: false;\n}\n@property --tw-border-style {\n  syntax: \"*\";\n  inherits: false;\n  initial-value: solid;\n}\n@layer properties {\n  @supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {\n    *, ::before, ::after, ::backdrop {\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-border-style: solid;\n    }\n  }\n}\n"],"sourceRoot":""}]);
 // Exports
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
 
