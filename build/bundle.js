@@ -126,13 +126,17 @@ function splitBanglaReelText(headline, requestedHighlight) {
   return { before: text, highlight: "", after: "" };
 }
 function BanglaReelHeadline({ popup }) {
-  const { before, highlight, after } = splitBanglaReelText(
+  const fontName = normalizeFontName(popup.fontFamily);
+  const accent = getHighlightColor(popup.highlightColor);
+  const { before, highlight: match, after } = splitBanglaReelText(
     popup.headline,
     popup.highlightText
   );
-  const fontName = normalizeFontName(popup.fontFamily);
-  const accent = getHighlightColor(popup.highlightColor);
-  return /* @__PURE__ */ (0,jsx_runtime.jsxs)(
+  const tokens = [];
+  if (before) before.split(/\s+/).filter(Boolean).forEach((w) => tokens.push({ text: w, isHighlight: false }));
+  if (match) match.split(/\s+/).filter(Boolean).forEach((w) => tokens.push({ text: w, isHighlight: true }));
+  if (after) after.split(/\s+/).filter(Boolean).forEach((w) => tokens.push({ text: w, isHighlight: false }));
+  return /* @__PURE__ */ (0,jsx_runtime.jsx)(
     "div",
     {
       style: {
@@ -151,22 +155,25 @@ function BanglaReelHeadline({ popup }) {
         color: "#fff",
         textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 4px 12px rgba(0,0,0,.85)"
       },
-      children: [
-        /* @__PURE__ */ (0,jsx_runtime.jsx)("span", { children: before }),
-        highlight ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
-          "span",
-          {
-            style: {
-              color: accent,
-              fontWeight: 900,
-              fontSize: "1.18em",
-              marginInline: "0.06em"
-            },
-            children: highlight
-          }
-        ) : null,
-        after ? /* @__PURE__ */ (0,jsx_runtime.jsx)("span", { children: after }) : null
-      ]
+      children: tokens.map((token, i) => {
+        const isLastInLine = (i + 1) % 8 === 0;
+        const isLastOverall = i === tokens.length - 1;
+        return /* @__PURE__ */ (0,jsx_runtime.jsxs)(react.Fragment, { children: [
+          token.isHighlight ? /* @__PURE__ */ (0,jsx_runtime.jsx)(
+            "span",
+            {
+              style: {
+                color: accent,
+                fontWeight: 900,
+                fontSize: "1.18em",
+                marginInline: "0.06em"
+              },
+              children: token.text
+            }
+          ) : /* @__PURE__ */ (0,jsx_runtime.jsx)("span", { children: token.text }),
+          !isLastOverall && (isLastInLine ? /* @__PURE__ */ (0,jsx_runtime.jsx)("br", {}) : " ")
+        ] }, i);
+      })
     }
   );
 }
@@ -174,24 +181,24 @@ function getSafePositionStyle(position) {
   const key = String(position || "center").trim();
   switch (key) {
     case "top":
-      return { position: "absolute", top: "10%", left: "5%", width: "90%" };
+      return { position: "absolute", top: "10%", left: "2%", width: "96%" };
     case "top-left":
-      return { position: "absolute", top: "10%", left: "5%", width: "85%", alignItems: "flex-start" };
+      return { position: "absolute", top: "10%", left: "2%", width: "90%", alignItems: "flex-start" };
     case "top-right":
-      return { position: "absolute", top: "10%", right: "5%", width: "85%", alignItems: "flex-end" };
+      return { position: "absolute", top: "10%", right: "2%", width: "90%", alignItems: "flex-end" };
     case "bottom":
-      return { position: "absolute", bottom: "10%", left: "5%", width: "90%" };
+      return { position: "absolute", bottom: "10%", left: "2%", width: "96%" };
     case "bottom-left":
-      return { position: "absolute", bottom: "10%", left: "5%", width: "85%", alignItems: "flex-start" };
+      return { position: "absolute", bottom: "10%", left: "2%", width: "90%", alignItems: "flex-start" };
     case "bottom-right":
-      return { position: "absolute", bottom: "10%", right: "5%", width: "85%", alignItems: "flex-end" };
+      return { position: "absolute", bottom: "10%", right: "2%", width: "90%", alignItems: "flex-end" };
     case "center-left":
-      return { position: "absolute", top: "50%", transform: "translateY(-50%)", left: "5%", width: "85%", alignItems: "flex-start" };
+      return { position: "absolute", top: "50%", transform: "translateY(-50%)", left: "2%", width: "90%", alignItems: "flex-start" };
     case "center-right":
-      return { position: "absolute", top: "50%", transform: "translateY(-50%)", right: "5%", width: "85%", alignItems: "flex-end" };
+      return { position: "absolute", top: "50%", transform: "translateY(-50%)", right: "2%", width: "90%", alignItems: "flex-end" };
     case "center":
     default:
-      return { position: "absolute", top: "50%", transform: "translateY(-50%)", left: "5%", width: "90%" };
+      return { position: "absolute", top: "50%", transform: "translateY(-50%)", left: "2%", width: "96%" };
   }
 }
 const Popup = ({ popup, durationInFrames }) => {
@@ -289,7 +296,17 @@ const Popup = ({ popup, durationInFrames }) => {
               whiteSpace: "normal",
               overflowWrap: "anywhere"
             },
-            children: popup.headline
+            children: (() => {
+              const tokens = (popup.headline || "").split(/\s+/).filter(Boolean);
+              return tokens.map((word, i) => {
+                const isLastInLine = (i + 1) % 8 === 0;
+                const isLastOverall = i === tokens.length - 1;
+                return /* @__PURE__ */ (0,jsx_runtime.jsxs)(react.Fragment, { children: [
+                  word,
+                  !isLastOverall && (isLastInLine ? /* @__PURE__ */ (0,jsx_runtime.jsx)("br", {}) : " ")
+                ] }, i);
+              });
+            })()
           }
         )
       ] })
@@ -322,7 +339,6 @@ const MainReel = ({ videoUrl, popups }) => {
               width: width || REEL_WIDTH,
               height: height || REEL_HEIGHT,
               objectFit: "cover",
-              // This crops any PC 16:9 aspect ratio to fill perfectly top-to-bottom on a phone screen
               objectPosition: "50% 50%",
               display: "block"
             }

@@ -188,12 +188,20 @@ function splitBanglaReelText(
 }
 
 function BanglaReelHeadline({ popup }: { popup: PopupData }) {
-  const { before, highlight, after } = splitBanglaReelText(
+  const fontName = normalizeFontName(popup.fontFamily);
+  const accent = getHighlightColor(popup.highlightColor);
+
+  // Split the text to locate the exact highlight phrase
+  const { before, highlight: match, after } = splitBanglaReelText(
     popup.headline,
     popup.highlightText,
   );
-  const fontName = normalizeFontName(popup.fontFamily);
-  const accent = getHighlightColor(popup.highlightColor);
+
+  // Break text into individual words, marking which ones are highlighted
+  const tokens: { text: string; isHighlight: boolean }[] = [];
+  if (before) before.split(/\s+/).filter(Boolean).forEach(w => tokens.push({ text: w, isHighlight: false }));
+  if (match) match.split(/\s+/).filter(Boolean).forEach(w => tokens.push({ text: w, isHighlight: true }));
+  if (after) after.split(/\s+/).filter(Boolean).forEach(w => tokens.push({ text: w, isHighlight: false }));
 
   return (
     <div
@@ -215,48 +223,60 @@ function BanglaReelHeadline({ popup }: { popup: PopupData }) {
           "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 4px 12px rgba(0,0,0,.85)",
       }}
     >
-      <span>{before}</span>
-      {highlight ? (
-        <span
-          style={{
-            color: accent,
-            fontWeight: 900,
-            fontSize: "1.18em",
-            marginInline: "0.06em",
-          }}
-        >
-          {highlight}
-        </span>
-      ) : null}
-      {after ? <span>{after}</span> : null}
+      {tokens.map((token, i) => {
+        // Enforce max 8 words per line
+        const isLastInLine = (i + 1) % 8 === 0;
+        const isLastOverall = i === tokens.length - 1;
+
+        return (
+          <React.Fragment key={i}>
+            {token.isHighlight ? (
+              <span
+                style={{
+                  color: accent,
+                  fontWeight: 900,
+                  fontSize: "1.18em",
+                  marginInline: "0.06em",
+                }}
+              >
+                {token.text}
+              </span>
+            ) : (
+              <span>{token.text}</span>
+            )}
+            
+            {!isLastOverall && (isLastInLine ? <br /> : " ")}
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }
 
-// Fixed positions to map to full 9:16 reel frame and mathematically prevent right-edge clipping
+// Adjust positioning to sit just before the video borders (96% width)
 function getSafePositionStyle(position?: string): React.CSSProperties {
   const key = String(position || "center").trim();
 
   switch (key) {
     case "top":
-      return { position: "absolute", top: "10%", left: "5%", width: "90%" };
+      return { position: "absolute", top: "10%", left: "2%", width: "96%" };
     case "top-left":
-      return { position: "absolute", top: "10%", left: "5%", width: "85%", alignItems: "flex-start" };
+      return { position: "absolute", top: "10%", left: "2%", width: "90%", alignItems: "flex-start" };
     case "top-right":
-      return { position: "absolute", top: "10%", right: "5%", width: "85%", alignItems: "flex-end" };
+      return { position: "absolute", top: "10%", right: "2%", width: "90%", alignItems: "flex-end" };
     case "bottom":
-      return { position: "absolute", bottom: "10%", left: "5%", width: "90%" };
+      return { position: "absolute", bottom: "10%", left: "2%", width: "96%" };
     case "bottom-left":
-      return { position: "absolute", bottom: "10%", left: "5%", width: "85%", alignItems: "flex-start" };
+      return { position: "absolute", bottom: "10%", left: "2%", width: "90%", alignItems: "flex-start" };
     case "bottom-right":
-      return { position: "absolute", bottom: "10%", right: "5%", width: "85%", alignItems: "flex-end" };
+      return { position: "absolute", bottom: "10%", right: "2%", width: "90%", alignItems: "flex-end" };
     case "center-left":
-      return { position: "absolute", top: "50%", transform: "translateY(-50%)", left: "5%", width: "85%", alignItems: "flex-start" };
+      return { position: "absolute", top: "50%", transform: "translateY(-50%)", left: "2%", width: "90%", alignItems: "flex-start" };
     case "center-right":
-      return { position: "absolute", top: "50%", transform: "translateY(-50%)", right: "5%", width: "85%", alignItems: "flex-end" };
+      return { position: "absolute", top: "50%", transform: "translateY(-50%)", right: "2%", width: "90%", alignItems: "flex-end" };
     case "center":
     default:
-      return { position: "absolute", top: "50%", transform: "translateY(-50%)", left: "5%", width: "90%" };
+      return { position: "absolute", top: "50%", transform: "translateY(-50%)", left: "2%", width: "96%" };
   }
 }
 
@@ -374,7 +394,20 @@ const Popup: React.FC<{
               overflowWrap: "anywhere",
             }}
           >
-            {popup.headline}
+            {(() => {
+              // Same 8 word constraint applies to regular non-Bangla popups
+              const tokens = (popup.headline || "").split(/\s+/).filter(Boolean);
+              return tokens.map((word, i) => {
+                const isLastInLine = (i + 1) % 8 === 0;
+                const isLastOverall = i === tokens.length - 1;
+                return (
+                  <React.Fragment key={i}>
+                    {word}
+                    {!isLastOverall && (isLastInLine ? <br /> : " ")}
+                  </React.Fragment>
+                );
+              });
+            })()}
           </div>
         )}
       </div>
@@ -409,14 +442,13 @@ export const MainReel: React.FC<MainReelProps> = ({ videoUrl, popups }) => {
             inset: 0,
             width: width || REEL_WIDTH,
             height: height || REEL_HEIGHT,
-            objectFit: "cover", // This crops any PC 16:9 aspect ratio to fill perfectly top-to-bottom on a phone screen
+            objectFit: "cover",
             objectPosition: "50% 50%",
             display: "block",
           }}
         />
       ) : null}
 
-      {/* Frame stretches entirely to 9:16 layout without arbitrary letterbox clipping */}
       <div
         style={{
           position: "absolute",
