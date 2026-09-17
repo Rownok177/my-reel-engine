@@ -276,7 +276,7 @@ function getSafePositionStyle(position?: string): React.CSSProperties {
       return { position: "absolute", top: "50%", transform: "translateY(-50%)", right: "2%", width: "90%", alignItems: "flex-end" };
     case "center":
     default:
-      return { position: "absolute", top: "50%", transform: "translateY(-50%)", left: "2%", width: "96%" };
+      return { position: "absolute", top: "68%", transform: "translateY(-50%)", left: "2%", width: "96%" };
   }
 }
 
