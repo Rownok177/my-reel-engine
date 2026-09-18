@@ -65,8 +65,8 @@ const HIGHLIGHT_COLORS: Record<string, string> = {
 const FONT_CONFIG = {
   "Hind Siliguri": {
     family: "Hind Siliguri",
-    src: staticFile("fonts/HindSiliguri-Bold.ttf"),
-    weight: "700 900",
+    regularSrc: staticFile("fonts/HindSiliguri-Regular.ttf"),
+    boldSrc: staticFile("fonts/HindSiliguri-Bold.ttf"),
   },
   "Noto Sans Bengali": {
     family: "Noto Sans Bengali",
@@ -129,13 +129,23 @@ function FontLoader() {
       try {
         const entries = Object.values(FONT_CONFIG);
         for (const font of entries) {
-          const face = new FontFace(font.family, `url("${font.src}")`, {
-            weight: font.weight,
-            style: "normal",
-            display: "block",
-          });
-          const loaded = await face.load();
-          document.fonts.add(loaded);
+          const sources =
+            "regularSrc" in font
+              ? [
+                  { src: font.regularSrc, weight: "400" },
+                  { src: font.boldSrc, weight: "700" },
+                ]
+              : [{ src: font.src, weight: font.weight }];
+
+          for (const source of sources) {
+            const face = new FontFace(font.family, `url("${source.src}")`, {
+              weight: source.weight,
+              style: "normal",
+              display: "block",
+            });
+            const loaded = await face.load();
+            document.fonts.add(loaded);
+          }
         }
 
         await Promise.all(
@@ -190,6 +200,8 @@ function splitBanglaReelText(
 function BanglaReelHeadline({ popup }: { popup: PopupData }) {
   const fontName = normalizeFontName(popup.fontFamily);
   const accent = getHighlightColor(popup.highlightColor);
+  const normalWeight = fontName === "Hind Siliguri" ? 400 : 500;
+  const highlightWeight = fontName === "Hind Siliguri" ? 700 : 900;
 
   // Split the text to locate the exact highlight phrase
   const { before, highlight: match, after } = splitBanglaReelText(
@@ -197,11 +209,32 @@ function BanglaReelHeadline({ popup }: { popup: PopupData }) {
     popup.highlightText,
   );
 
-  // Break text into individual words, marking which ones are highlighted
+  // Break text into individual words so the reel stays within five words per line.
   const tokens: { text: string; isHighlight: boolean }[] = [];
-  if (before) before.split(/\s+/).filter(Boolean).forEach(w => tokens.push({ text: w, isHighlight: false }));
-  if (match) match.split(/\s+/).filter(Boolean).forEach(w => tokens.push({ text: w, isHighlight: true }));
-  if (after) after.split(/\s+/).filter(Boolean).forEach(w => tokens.push({ text: w, isHighlight: false }));
+  if (before) before.split(/\s+/).filter(Boolean).forEach((word) => tokens.push({ text: word, isHighlight: false }));
+  if (match) match.split(/\s+/).filter(Boolean).forEach((word) => tokens.push({ text: word, isHighlight: true }));
+  if (after) after.split(/\s+/).filter(Boolean).forEach((word) => tokens.push({ text: word, isHighlight: false }));
+
+  const normalTextStyle: React.CSSProperties = {
+    fontFamily: `"${fontName}", sans-serif`,
+    fontSize: 52,
+    fontWeight: normalWeight,
+    color: "#fff",
+    lineHeight: 1,
+    textShadow:
+      "-2px -2px 0 rgba(0,0,0,.85), 2px -2px 0 rgba(0,0,0,.85), -2px 2px 0 rgba(0,0,0,.85), 2px 2px 0 rgba(0,0,0,.85), 0 4px 12px rgba(0,0,0,.65)",
+  };
+
+  const highlightTextStyle: React.CSSProperties = {
+    ...normalTextStyle,
+    fontSize: 78,
+    fontWeight: highlightWeight,
+    color: accent,
+    lineHeight: 0.92,
+    marginInline: 6,
+    textShadow:
+      "-3px -3px 0 rgba(0,0,0,.9), 3px -3px 0 rgba(0,0,0,.9), -3px 3px 0 rgba(0,0,0,.9), 3px 3px 0 rgba(0,0,0,.9), 0 5px 14px rgba(0,0,0,.75)",
+  };
 
   return (
     <div
@@ -210,22 +243,15 @@ function BanglaReelHeadline({ popup }: { popup: PopupData }) {
         maxWidth: "100%",
         margin: 0,
         boxSizing: "border-box",
-        fontFamily: `"${fontName}", sans-serif`,
-        fontSize: 54,
-        fontWeight: 800,
-        lineHeight: 1.1,
+        display: "block",
         textAlign: "center",
         wordBreak: "break-word",
         whiteSpace: "normal",
         overflowWrap: "anywhere",
-        color: "#fff",
-        textShadow:
-          "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 4px 12px rgba(0,0,0,.85)",
       }}
     >
       {tokens.map((token, i) => {
-        // Enforce max 8 words per line
-        const isLastInLine = (i + 1) % 8 === 0;
+        const isLastInLine = (i + 1) % 5 === 0;
         const isLastOverall = i === tokens.length - 1;
 
         return (
@@ -233,16 +259,13 @@ function BanglaReelHeadline({ popup }: { popup: PopupData }) {
             {token.isHighlight ? (
               <span
                 style={{
-                  color: accent,
-                  fontWeight: 900,
-                  fontSize: "1.18em",
-                  marginInline: "0.06em",
+                  ...highlightTextStyle,
                 }}
               >
                 {token.text}
               </span>
             ) : (
-              <span>{token.text}</span>
+              <span style={normalTextStyle}>{token.text}</span>
             )}
             
             {!isLastOverall && (isLastInLine ? <br /> : " ")}
@@ -339,13 +362,14 @@ const Popup: React.FC<{
     transform: animationTransform,
     transformOrigin: "center center",
     backgroundColor: isBanglaReel
-      ? "transparent"
+      ? "rgba(0, 0, 0, 0.34)"
       : popup.bgColor || "rgba(15,23,42,.90)",
     border: isBanglaReel
       ? "none"
       : `2px solid ${popup.borderColor || accent}`,
-    borderRadius: isBanglaReel ? 0 : 18,
-    padding: isBanglaReel ? "4px 8px" : "14px 22px",
+    borderRadius: isBanglaReel ? 16 : 18,
+    padding: isBanglaReel ? "8px 18px 10px" : "14px 22px",
+    ...(isBanglaReel ? { backdropFilter: "blur(3px)" } : {}),
     boxShadow: isBanglaReel
       ? "none"
       : "0 12px 24px rgba(0,0,0,.40)",
