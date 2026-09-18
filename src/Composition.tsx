@@ -203,13 +203,11 @@ function BanglaReelHeadline({ popup }: { popup: PopupData }) {
   const normalWeight = fontName === "Hind Siliguri" ? 400 : 500;
   const highlightWeight = fontName === "Hind Siliguri" ? 700 : 900;
 
-  // Split the text to locate the exact highlight phrase
   const { before, highlight: match, after } = splitBanglaReelText(
     popup.headline,
     popup.highlightText,
   );
 
-  // Break text into individual words so the reel stays within five words per line.
   const tokens: { text: string; isHighlight: boolean }[] = [];
   if (before) before.split(/\s+/).filter(Boolean).forEach((word) => tokens.push({ text: word, isHighlight: false }));
   if (match) match.split(/\s+/).filter(Boolean).forEach((word) => tokens.push({ text: word, isHighlight: true }));
@@ -221,8 +219,8 @@ function BanglaReelHeadline({ popup }: { popup: PopupData }) {
     fontWeight: normalWeight,
     color: "#fff",
     lineHeight: 1,
-    textShadow:
-      "-2px -2px 0 rgba(0,0,0,.85), 2px -2px 0 rgba(0,0,0,.85), -2px 2px 0 rgba(0,0,0,.85), 2px 2px 0 rgba(0,0,0,.85), 0 4px 12px rgba(0,0,0,.65)",
+    // Removed the thick black stroke/borders. Left a soft shadow for readability.
+    textShadow: "0 4px 12px rgba(0,0,0,.65)",
   };
 
   const highlightTextStyle: React.CSSProperties = {
@@ -232,8 +230,8 @@ function BanglaReelHeadline({ popup }: { popup: PopupData }) {
     color: accent,
     lineHeight: 0.92,
     marginInline: 6,
-    textShadow:
-      "-3px -3px 0 rgba(0,0,0,.9), 3px -3px 0 rgba(0,0,0,.9), -3px 3px 0 rgba(0,0,0,.9), 3px 3px 0 rgba(0,0,0,.9), 0 5px 14px rgba(0,0,0,.75)",
+    // Removed the thick black stroke/borders. Left a soft shadow for readability.
+    textShadow: "0 5px 14px rgba(0,0,0,.75)",
   };
 
   return (
@@ -276,7 +274,6 @@ function BanglaReelHeadline({ popup }: { popup: PopupData }) {
   );
 }
 
-// Adjust positioning to sit just before the video borders (96% width)
 function getSafePositionStyle(position?: string): React.CSSProperties {
   const key = String(position || "center").trim();
 
@@ -361,18 +358,13 @@ const Popup: React.FC<{
     overflow: "hidden",
     transform: animationTransform,
     transformOrigin: "center center",
-    backgroundColor: isBanglaReel
-      ? "rgba(0, 0, 0, 0.34)"
-      : popup.bgColor || "rgba(15,23,42,.90)",
-    border: isBanglaReel
-      ? "none"
-      : `2px solid ${popup.borderColor || accent}`,
-    borderRadius: isBanglaReel ? 16 : 18,
+    // Removed black background boxes and borders
+    backgroundColor: "transparent",
+    border: "none",
+    borderRadius: 0,
     padding: isBanglaReel ? "8px 18px 10px" : "14px 22px",
-    ...(isBanglaReel ? { backdropFilter: "blur(3px)" } : {}),
-    boxShadow: isBanglaReel
-      ? "none"
-      : "0 12px 24px rgba(0,0,0,.40)",
+    backdropFilter: "none",
+    boxShadow: "none",
   };
 
   return (
@@ -419,7 +411,6 @@ const Popup: React.FC<{
             }}
           >
             {(() => {
-              // Same 8 word constraint applies to regular non-Bangla popups
               const tokens = (popup.headline || "").split(/\s+/).filter(Boolean);
               return tokens.map((word, i) => {
                 const isLastInLine = (i + 1) % 8 === 0;
@@ -466,7 +457,7 @@ export const MainReel: React.FC<MainReelProps> = ({ videoUrl, popups }) => {
             inset: 0,
             width: width || REEL_WIDTH,
             height: height || REEL_HEIGHT,
-            objectFit: "cover",
+            objectFit: "cover", // Keeps the video filling the screen without letterboxing
             objectPosition: "50% 50%",
             display: "block",
           }}
