@@ -1,8 +1,10 @@
 import React from "react";
 import { Composition } from "remotion";
 import { getVideoMetadata } from "@remotion/media-utils";
-import { MainComposition } from "./Composition";
+import { MainComposition, type MainCompositionProps } from "./Composition";
 import "./index.css";
+
+const FPS = 30;
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -12,56 +14,65 @@ export const RemotionRoot: React.FC = () => {
         component={MainComposition}
         width={1080}
         height={1920}
-        fps={30}
-        durationInFrames={1800} // Fallback baseline for Remotion preview
-        calculateMetadata={async ({ props }: { props: Record<string, any> }) => {
-          const fps = 30;
+        fps={FPS}
+        durationInFrames={1}
+        calculateMetadata={async ({ props }) => {
+          const typedProps = props as MainCompositionProps;
 
-          // 1. Check if n8n passed duration explicitly (handling nested or string formats)
-          const explicitDuration =
-            props?.durationInFrames ||
-            props?.duration ||
-            props?.props?.durationInFrames ||
-            props?.inputProps?.durationInFrames;
+          const videoUrl = String(
+            typedProps?.videoUrl || ""
+          ).trim();
 
-          if (explicitDuration && !isNaN(Number(explicitDuration)) && Number(explicitDuration) > 0) {
+          if (!videoUrl) {
+            console.warn("[Root] No video URL found.");
             return {
-              durationInFrames: Math.ceil(Number(explicitDuration)),
+              durationInFrames: 1,
             };
           }
 
-          // 2. Try fetching video metadata directly from videoUrl or mediaUrl
-          const targetUrl = props?.videoUrl || props?.mediaUrl;
-          if (targetUrl) {
-            try {
-              const metadata = await getVideoMetadata(targetUrl);
-              if (metadata?.durationInSeconds) {
-                return {
-                  durationInFrames: Math.ceil(metadata.durationInSeconds * fps),
-                };
-              }
-            } catch (err) {
-              console.error("Failed to fetch video metadata via URL:", err);
+          try {
+            const metadata = await getVideoMetadata(videoUrl);
+
+            const durationInSeconds = Number(
+              metadata?.durationInSeconds
+            );
+
+            if (
+              !Number.isFinite(durationInSeconds) ||
+              durationInSeconds <= 0
+            ) {
+              throw new Error(
+                `Invalid source video duration: ${metadata?.durationInSeconds}`
+              );
             }
+
+            const durationInFrames = Math.max(
+              1,
+              Math.ceil(durationInSeconds * FPS)
+            );
+
+            console.log(
+              `[Root] Source video duration: ${durationInSeconds}s`
+            );
+
+            console.log(
+              `[Root] Composition duration: ${durationInFrames} frames`
+            );
+
+            return {
+              durationInFrames,
+            };
+          } catch (error) {
+            console.error(
+              "[Root] Failed to determine source video duration:",
+              error
+            );
+
+            // Do not silently create a 60-second video.
+            return {
+              durationInFrames: 1,
+            };
           }
-
-          // 3. Fallback: Calculate duration from the highest popup or overlay end_time
-          const subtitleItems = props?.popups || props?.overlays || [];
-          if (Array.isArray(subtitleItems) && subtitleItems.length > 0) {
-            const maxEndTime = subtitleItems.reduce((max: number, item: any) => {
-              const endTime = Number(item.end_time || item.endTime || 0);
-              return endTime > max ? endTime : max;
-            }, 0);
-
-            if (maxEndTime > 0) {
-              return {
-                durationInFrames: Math.ceil(maxEndTime * fps),
-              };
-            }
-          }
-
-          // 4. Default fallback to 60 seconds (1800 frames at 30fps) if all else fails
-          return { durationInFrames: 1800 };
         }}
         defaultProps={{
           videoUrl:

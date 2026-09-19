@@ -442,6 +442,7 @@ var update = injectStylesIntoStyleTag_default()(index_js_src/* default */.A, opt
 
 
 
+const FPS = 30;
 const RemotionRoot = () => {
   return /* @__PURE__ */ (0,jsx_runtime.jsx)(jsx_runtime.Fragment, { children: /* @__PURE__ */ (0,jsx_runtime.jsx)(
     esm.Composition,
@@ -450,43 +451,51 @@ const RemotionRoot = () => {
       component: MainComposition,
       width: 1080,
       height: 1920,
-      fps: 30,
-      durationInFrames: 1800,
+      fps: FPS,
+      durationInFrames: 1,
       calculateMetadata: async ({ props }) => {
-        var _a, _b;
-        const fps = 30;
-        const explicitDuration = (props == null ? void 0 : props.durationInFrames) || (props == null ? void 0 : props.duration) || ((_a = props == null ? void 0 : props.props) == null ? void 0 : _a.durationInFrames) || ((_b = props == null ? void 0 : props.inputProps) == null ? void 0 : _b.durationInFrames);
-        if (explicitDuration && !isNaN(Number(explicitDuration)) && Number(explicitDuration) > 0) {
+        const typedProps = props;
+        const videoUrl = String(
+          (typedProps == null ? void 0 : typedProps.videoUrl) || ""
+        ).trim();
+        if (!videoUrl) {
+          console.warn("[Root] No video URL found.");
           return {
-            durationInFrames: Math.ceil(Number(explicitDuration))
+            durationInFrames: 1
           };
         }
-        const targetUrl = (props == null ? void 0 : props.videoUrl) || (props == null ? void 0 : props.mediaUrl);
-        if (targetUrl) {
-          try {
-            const metadata = await (0,dist_esm/* getVideoMetadata */.HY)(targetUrl);
-            if (metadata == null ? void 0 : metadata.durationInSeconds) {
-              return {
-                durationInFrames: Math.ceil(metadata.durationInSeconds * fps)
-              };
-            }
-          } catch (err) {
-            console.error("Failed to fetch video metadata via URL:", err);
+        try {
+          const metadata = await (0,dist_esm/* getVideoMetadata */.HY)(videoUrl);
+          const durationInSeconds = Number(
+            metadata == null ? void 0 : metadata.durationInSeconds
+          );
+          if (!Number.isFinite(durationInSeconds) || durationInSeconds <= 0) {
+            throw new Error(
+              `Invalid source video duration: ${metadata == null ? void 0 : metadata.durationInSeconds}`
+            );
           }
+          const durationInFrames = Math.max(
+            1,
+            Math.ceil(durationInSeconds * FPS)
+          );
+          console.log(
+            `[Root] Source video duration: ${durationInSeconds}s`
+          );
+          console.log(
+            `[Root] Composition duration: ${durationInFrames} frames`
+          );
+          return {
+            durationInFrames
+          };
+        } catch (error) {
+          console.error(
+            "[Root] Failed to determine source video duration:",
+            error
+          );
+          return {
+            durationInFrames: 1
+          };
         }
-        const subtitleItems = (props == null ? void 0 : props.popups) || (props == null ? void 0 : props.overlays) || [];
-        if (Array.isArray(subtitleItems) && subtitleItems.length > 0) {
-          const maxEndTime = subtitleItems.reduce((max, item) => {
-            const endTime = Number(item.end_time || item.endTime || 0);
-            return endTime > max ? endTime : max;
-          }, 0);
-          if (maxEndTime > 0) {
-            return {
-              durationInFrames: Math.ceil(maxEndTime * fps)
-            };
-          }
-        }
-        return { durationInFrames: 1800 };
       },
       defaultProps: {
         videoUrl: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
