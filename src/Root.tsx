@@ -13,28 +13,54 @@ export const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         fps={30}
-        durationInFrames={1800} // This acts as a fallback for the editor
-        calculateMetadata={async ({ props }) => {
-          // 1. If n8n passed the duration explicitly, use it immediately
-          if (props.durationInFrames) {
+        durationInFrames={1800} // Fallback baseline for Remotion preview
+        calculateMetadata={async ({ props }: { props: Record<string, any> }) => {
+          const fps = 30;
+
+          // 1. Check if n8n passed duration explicitly (handling nested or string formats)
+          const explicitDuration =
+            props?.durationInFrames ||
+            props?.duration ||
+            props?.props?.durationInFrames ||
+            props?.inputProps?.durationInFrames;
+
+          if (explicitDuration && !isNaN(Number(explicitDuration)) && Number(explicitDuration) > 0) {
             return {
-              durationInFrames: Number(props.durationInFrames),
+              durationInFrames: Math.ceil(Number(explicitDuration)),
             };
           }
 
-          // 2. Otherwise, fetch the video duration dynamically from the URL
-          if (props.videoUrl) {
+          // 2. Try fetching video metadata directly from videoUrl or mediaUrl
+          const targetUrl = props?.videoUrl || props?.mediaUrl;
+          if (targetUrl) {
             try {
-              const metadata = await getVideoMetadata(props.videoUrl);
-              return {
-                durationInFrames: Math.ceil(metadata.durationInSeconds * 30),
-              };
+              const metadata = await getVideoMetadata(targetUrl);
+              if (metadata?.durationInSeconds) {
+                return {
+                  durationInFrames: Math.ceil(metadata.durationInSeconds * fps),
+                };
+              }
             } catch (err) {
-              console.error("Failed to fetch video metadata:", err);
+              console.error("Failed to fetch video metadata via URL:", err);
             }
           }
 
-          // 3. Fallback to 60 seconds (1800 frames at 30fps) if all else fails
+          // 3. Fallback: Calculate duration from the highest popup or overlay end_time
+          const subtitleItems = props?.popups || props?.overlays || [];
+          if (Array.isArray(subtitleItems) && subtitleItems.length > 0) {
+            const maxEndTime = subtitleItems.reduce((max: number, item: any) => {
+              const endTime = Number(item.end_time || item.endTime || 0);
+              return endTime > max ? endTime : max;
+            }, 0);
+
+            if (maxEndTime > 0) {
+              return {
+                durationInFrames: Math.ceil(maxEndTime * fps),
+              };
+            }
+          }
+
+          // 4. Default fallback to 60 seconds (1800 frames at 30fps) if all else fails
           return { durationInFrames: 1800 };
         }}
         defaultProps={{

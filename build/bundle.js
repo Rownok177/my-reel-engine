@@ -453,19 +453,37 @@ const RemotionRoot = () => {
       fps: 30,
       durationInFrames: 1800,
       calculateMetadata: async ({ props }) => {
-        if (props.durationInFrames) {
+        var _a, _b;
+        const fps = 30;
+        const explicitDuration = (props == null ? void 0 : props.durationInFrames) || (props == null ? void 0 : props.duration) || ((_a = props == null ? void 0 : props.props) == null ? void 0 : _a.durationInFrames) || ((_b = props == null ? void 0 : props.inputProps) == null ? void 0 : _b.durationInFrames);
+        if (explicitDuration && !isNaN(Number(explicitDuration)) && Number(explicitDuration) > 0) {
           return {
-            durationInFrames: Number(props.durationInFrames)
+            durationInFrames: Math.ceil(Number(explicitDuration))
           };
         }
-        if (props.videoUrl) {
+        const targetUrl = (props == null ? void 0 : props.videoUrl) || (props == null ? void 0 : props.mediaUrl);
+        if (targetUrl) {
           try {
-            const metadata = await (0,dist_esm/* getVideoMetadata */.HY)(props.videoUrl);
-            return {
-              durationInFrames: Math.ceil(metadata.durationInSeconds * 30)
-            };
+            const metadata = await (0,dist_esm/* getVideoMetadata */.HY)(targetUrl);
+            if (metadata == null ? void 0 : metadata.durationInSeconds) {
+              return {
+                durationInFrames: Math.ceil(metadata.durationInSeconds * fps)
+              };
+            }
           } catch (err) {
-            console.error("Failed to fetch video metadata:", err);
+            console.error("Failed to fetch video metadata via URL:", err);
+          }
+        }
+        const subtitleItems = (props == null ? void 0 : props.popups) || (props == null ? void 0 : props.overlays) || [];
+        if (Array.isArray(subtitleItems) && subtitleItems.length > 0) {
+          const maxEndTime = subtitleItems.reduce((max, item) => {
+            const endTime = Number(item.end_time || item.endTime || 0);
+            return endTime > max ? endTime : max;
+          }, 0);
+          if (maxEndTime > 0) {
+            return {
+              durationInFrames: Math.ceil(maxEndTime * fps)
+            };
           }
         }
         return { durationInFrames: 1800 };
