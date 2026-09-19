@@ -203,35 +203,33 @@ function BanglaReelHeadline({ popup }: { popup: PopupData }) {
   const normalWeight = fontName === "Hind Siliguri" ? 400 : 500;
   const highlightWeight = fontName === "Hind Siliguri" ? 700 : 900;
 
-  const { before, highlight: match, after } = splitBanglaReelText(
+  const { before, highlight, after } = splitBanglaReelText(
     popup.headline,
     popup.highlightText,
   );
 
-  const tokens: { text: string; isHighlight: boolean }[] = [];
-  if (before) before.split(/\s+/).filter(Boolean).forEach((word) => tokens.push({ text: word, isHighlight: false }));
-  if (match) match.split(/\s+/).filter(Boolean).forEach((word) => tokens.push({ text: word, isHighlight: true }));
-  if (after) after.split(/\s+/).filter(Boolean).forEach((word) => tokens.push({ text: word, isHighlight: false }));
+  // Dual-Font Stack: English renders in Montserrat/Segoe, Bangla falls back to fontName
+  const compositeFontFamily = `"Montserrat", "Segoe UI", "${fontName}", sans-serif`;
 
   const normalTextStyle: React.CSSProperties = {
-    fontFamily: `"${fontName}", sans-serif`,
-    fontSize: 52,
+    fontFamily: compositeFontFamily,
+    fontSize: 48,
     fontWeight: normalWeight,
     color: "#fff",
-    lineHeight: 1,
-    // Removed the thick black stroke/borders. Left a soft shadow for readability.
+    lineHeight: 1.2,
     textShadow: "0 4px 12px rgba(0,0,0,.65)",
+    textAlign: "center",
   };
 
   const highlightTextStyle: React.CSSProperties = {
-    ...normalTextStyle,
-    fontSize: 78,
+    fontFamily: compositeFontFamily,
+    fontSize: 85, // Significantly enlarged
     fontWeight: highlightWeight,
     color: accent,
-    lineHeight: 0.92,
-    marginInline: 6,
-    // Removed the thick black stroke/borders. Left a soft shadow for readability.
+    lineHeight: 1.1,
+    margin: "10px 0", // Vertical spacing around the highlight
     textShadow: "0 5px 14px rgba(0,0,0,.75)",
+    textAlign: "center",
   };
 
   return (
@@ -239,37 +237,25 @@ function BanglaReelHeadline({ popup }: { popup: PopupData }) {
       style={{
         width: "100%",
         maxWidth: "100%",
-        margin: 0,
         boxSizing: "border-box",
-        display: "block",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
         textAlign: "center",
-        wordBreak: "break-word",
-        whiteSpace: "normal",
-        overflowWrap: "anywhere",
       }}
     >
-      {tokens.map((token, i) => {
-        const isLastInLine = (i + 1) % 5 === 0;
-        const isLastOverall = i === tokens.length - 1;
-
-        return (
-          <React.Fragment key={i}>
-            {token.isHighlight ? (
-              <span
-                style={{
-                  ...highlightTextStyle,
-                }}
-              >
-                {token.text}
-              </span>
-            ) : (
-              <span style={normalTextStyle}>{token.text}</span>
-            )}
-            
-            {!isLastOverall && (isLastInLine ? <br /> : " ")}
-          </React.Fragment>
-        );
-      })}
+      {before && before.trim() && (
+        <span style={normalTextStyle}>{before.trim()}</span>
+      )}
+      
+      {highlight && highlight.trim() && (
+        <span style={highlightTextStyle}>{highlight.trim()}</span>
+      )}
+      
+      {after && after.trim() && (
+        <span style={normalTextStyle}>{after.trim()}</span>
+      )}
     </div>
   );
 }
@@ -358,7 +344,6 @@ const Popup: React.FC<{
     overflow: "hidden",
     transform: animationTransform,
     transformOrigin: "center center",
-    // Removed black background boxes and borders
     backgroundColor: "transparent",
     border: "none",
     borderRadius: 0,
@@ -380,7 +365,7 @@ const Popup: React.FC<{
         {popup.badgeText ? (
           <div
             style={{
-              fontFamily: `"${fontName}", sans-serif`,
+              fontFamily: `"Montserrat", "Segoe UI", "${fontName}", sans-serif`,
               fontSize: 14,
               fontWeight: 800,
               color: popup.borderColor || accent,
@@ -399,7 +384,7 @@ const Popup: React.FC<{
           <div
             style={{
               width: "100%",
-              fontFamily: `"${fontName}", sans-serif`,
+              fontFamily: `"Montserrat", "Segoe UI", "${fontName}", sans-serif`,
               fontSize: 48,
               fontWeight: 900,
               lineHeight: 1.1,
@@ -457,7 +442,7 @@ export const MainReel: React.FC<MainReelProps> = ({ videoUrl, popups }) => {
             inset: 0,
             width: width || REEL_WIDTH,
             height: height || REEL_HEIGHT,
-            objectFit: "cover", // Keeps the video filling the screen without letterboxing
+            objectFit: "cover",
             objectPosition: "50% 50%",
             display: "block",
           }}
